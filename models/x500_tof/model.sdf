@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sdf version='1.9'>
+  <model name='x500_tof'>
+    <include merge='true'>
+      <uri>x500</uri>
+    </include>
+
+    <!-- Sensor 1: Front (0 deg) -->
+    <link name="tof_0_link">
+      <pose relative_to="base_link">0.150 0.000 0 0 0 0</pose>
+      <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+      <sensor name='tof_0' type='gpu_lidar'>
+        <gz_frame_id>tof_0_link</gz_frame_id>
+        <pose relative_to="base_link">0.150 0.000 0 0 0 0</pose>
+        <update_rate>12</update_rate>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/tof/0</topic>
+      </sensor>
+    </link>
+    <joint name="tof_0_joint" type="fixed"><parent>base_link</parent><child>tof_0_link</child></joint>
+
+    <!-- Sensor 2: 36 deg -->
+    <link name="tof_1_link">
+      <pose relative_to="base_link">0.121 0.088 0 0 0 0.6283</pose>
+      <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+      <sensor name='tof_1' type='gpu_lidar'>
+        <gz_frame_id>tof_1_link</gz_frame_id>
+        <pose relative_to="base_link">0.121 0.088 0 0 0 0.6283</pose>
+        <update_rate>12</update_rate>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/tof/1</topic>
+      </sensor>
+    </link>
+    <joint name="tof_1_joint" type="fixed"><parent>base_link</parent><child>tof_1_link</child></joint>
+
+    <!-- Sensor 3: 72 deg -->
+    <link name="tof_2_link">
+      <pose relative_to="base_link">0.046 0.143 0 0 0 1.2566</pose>
+      <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+      <sensor name='tof_2' type='gpu_lidar'>
+        <gz_frame_id>tof_2_link</gz_frame_id>
+        <pose relative_to="base_link">0.046 0.143 0 0 0 1.2566</pose>
+        <update_rate>12</update_rate>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/tof/2</topic>
+      </sensor>
+    </link>
+    <joint name="tof_2_joint" type="fixed"><parent>base_link</parent><child>tof_2_link</child></joint>
+
+    <!-- Sensor 4: 108 deg -->
+    <link name="tof_3_link">
+      <pose relative_to="base_link">-0.046 0.143 0 0 0 1.8850</pose>
+      <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+      <sensor name='tof_3' type='gpu_lidar'>
+        <gz_frame_id>tof_3_link</gz_frame_id>
+        <pose relative_to="base_link">-0.046 0.143 0 0 0 1.8850</pose>
+        <update_rate>12</update_rate>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/tof/3</topic>
+      </sensor>
+    </link>
+    <joint name="tof_3_joint" type="fixed"><parent>base_link</parent><child>tof_3_link</child></joint>
+
+    <!-- Sensor 5: 144 deg -->
+    <link name="tof_4_link">
+      <pose relative_to="base_link">-0.121 0.088 0 0 0 2.5133</pose>
+      <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+      <sensor name='tof_4' type='gpu_lidar'>
+        <gz_frame_id>tof_4_link</gz_frame_id>
+        <pose relative_to="base_link">-0.121 0.088 0 0 0 2.5133</pose>
+        <update_rate>12</update_rate>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/tof/4</topic>
+      </sensor>
+    </link>
+    <joint name="tof_4_joint" type="fixed"><parent>base_link</parent><child>tof_4_link</child></joint>
+
+    <!-- Sensor 6: 180 deg (rear) -->
+    <link name="tof_5_link">
+      <pose relative_to="base_link">-0.150 0.000 0 0 0 3.1416</pose>
+      <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+      <sensor name='tof_5' type='gpu_lidar'>
+        <gz_frame_id>tof_5_link</gz_frame_id>
+        <pose relative_to="base_link">-0.150 0.000 0 0 0 3.1416</pose>
+        <update_rate>12</update_rate>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/tof/5</topic>
+      </sensor>
+    </link>
+    <joint name="tof_5_joint" type="fixed"><parent>base_link</parent><child>tof_5_link</child></joint>
+
+    <!-- Sensor 7: 216 deg -->
+    <link name="tof_6_link">
+      <pose relative_to="base_link">-0.121 -0.088 0 0 0 -2.5133</pose>
+      <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+      <sensor name='tof_6' type='gpu_lidar'>
+        <gz_frame_id>tof_6_link</gz_frame_id>
+        <pose relative_to="base_link">-0.121 -0.088 0 0 0 -2.5133</pose>
+        <update_rate>12</update_rate>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/tof/6</topic>
+      </sensor>
+    </link>
+    <joint name="tof_6_joint" type="fixed"><parent>base_link</parent><child>tof_6_link</child></joint>
+
+    <!-- Sensor 8: 252 deg -->
+    <link name="tof_7_link">
+      <pose relative_to="base_link">-0.046 -0.143 0 0 0 -1.8850</pose>
+      <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+      <sensor name='tof_7' type='gpu_lidar'>
+        <gz_frame_id>tof_7_link</gz_frame_id>
+        <pose relative_to="base_link">-0.046 -0.143 0 0 0 -1.8850</pose>
+        <update_rate>12</update_rate>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/tof/7</topic>
+      </sensor>
+    </link>
+    <joint name="tof_7_joint" type="fixed"><parent>base_link</parent><child>tof_7_link</child></joint>
+
+    <!-- Sensor 9: 288 deg -->
+    <link name="tof_8_link">
+      <pose relative_to="base_link">0.046 -0.143 0 0 0 -1.2566</pose>
+      <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+      <sensor name='tof_8' type='gpu_lidar'>
+        <gz_frame_id>tof_8_link</gz_frame_id>
+        <pose relative_to="base_link">0.046 -0.143 0 0 0 -1.2566</pose>
+        <update_rate>12</update_rate>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/tof/8</topic>
+      </sensor>
+    </link>
+    <joint name="tof_8_joint" type="fixed"><parent>base_link</parent><child>tof_8_link</child></joint>
+
+    <!-- Sensor 10: 324 deg -->
+    <link name="tof_9_link">
+      <pose relative_to="base_link">0.121 -0.088 0 0 0 -0.6283</pose>
+      <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+      <sensor name='tof_9' type='gpu_lidar'>
+        <gz_frame_id>tof_9_link</gz_frame_id>
+        <pose relative_to="base_link">0.121 -0.088 0 0 0 -0.6283</pose>
+        <update_rate>12</update_rate>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/tof/9</topic>
+      </sensor>
+    </link>
+    <joint name="tof_9_joint" type="fixed"><parent>base_link</parent><child>tof_9_link</child></joint>
+
+    <!-- Sensor 11: Up -->
+    <link name="tof_up_link">
+      <pose relative_to="base_link">0 0 0.05 0 -1.5708 0</pose>
+      <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+      <sensor name='tof_up' type='gpu_lidar'>
+        <gz_frame_id>tof_up_link</gz_frame_id>
+        <pose relative_to="base_link">0 0 0.05 0 -1.5708 0</pose>
+        <update_rate>12</update_rate>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/tof/up</topic>
+      </sensor>
+    </link>
+    <joint name="tof_up_joint" type="fixed"><parent>base_link</parent><child>tof_up_link</child></joint>
+
+    <!-- Sensor 12: Down -->
+    <link name="tof_down_link">
+      <pose relative_to="base_link">0 0 -0.05 0 1.5708 0</pose>
+      <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+      <sensor name='tof_down' type='gpu_lidar'>
+        <gz_frame_id>tof_down_link</gz_frame_id>
+        <pose relative_to="base_link">0 0 -0.05 0 1.5708 0</pose>
+        <update_rate>12</update_rate>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/tof/down</topic>
+      </sensor>
+    </link>
+    <joint name="tof_down_joint" type="fixed"><parent>base_link</parent><child>tof_down_link</child></joint>
+
+  </model>
+</sdf>
