@@ -82,7 +82,7 @@ vfh = VFH2D(
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
     drone_radius=0.35,
-    enlarge_bins=2,
+    enlarge_bins=3,
 )
 
 # Visualizer (separate process)

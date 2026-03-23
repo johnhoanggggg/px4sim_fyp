@@ -143,12 +143,32 @@ class VFH2D:
             self._last_chosen = None
             return None
 
-        free_centres = self._bin_centres[free_mask]
+        free_indices = np.where(free_mask)[0]
+        free_centres = self._bin_centres[free_indices]
 
-        # Angular difference (wrapped to [-pi, pi])
+        # Angular difference to goal (wrapped to [-pi, pi])
         diff = free_centres - goal_az
         diff = (diff + math.pi) % (2 * math.pi) - math.pi
-        best_idx = np.argmin(np.abs(diff))
+        goal_cost = np.abs(diff)
+
+        # Clearance penalty: prefer directions far from blocked bins.
+        # For each free bin, count how many bins away the nearest blocked
+        # bin is.  Bins adjacent to obstacles get a high penalty.
+        clearance = np.full(len(free_indices), self.n_bins // 2, dtype=float)
+        for k, fi in enumerate(free_indices):
+            for offset in range(1, self.n_bins // 2 + 1):
+                if self._blocked[(fi + offset) % self.n_bins] or \
+                   self._blocked[(fi - offset) % self.n_bins]:
+                    clearance[k] = offset
+                    break
+        # Normalize: 0 = right next to obstacle, 1 = maximally clear
+        clearance_norm = clearance / (self.n_bins // 2)
+        # Penalty in radians: bins with clearance=1 bin get ~40° penalty
+        clearance_penalty = (1.0 - clearance_norm) * math.radians(40)
+
+        cost = goal_cost + clearance_penalty
+
+        best_idx = np.argmin(cost)
         chosen = float(free_centres[best_idx])
         self._last_chosen = chosen
         return chosen
