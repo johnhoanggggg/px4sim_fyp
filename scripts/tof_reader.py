@@ -139,8 +139,8 @@ class TofReader:
         for name, ranges in raw.items():
             if name not in self._rot:
                 continue
-            # Filter valid ranges
-            valid = (ranges > 0.02) & (ranges < max_range) & np.isfinite(ranges)
+            # Filter valid ranges (>0.15m rejects self-detection of drone arms)
+            valid = (ranges > 0.15) & (ranges < max_range) & np.isfinite(ranges)
             if not np.any(valid):
                 continue
             # Points in sensor-local frame
