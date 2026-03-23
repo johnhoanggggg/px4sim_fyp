@@ -26,8 +26,8 @@ from vfh3d import VFH3D
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MAX_SPEED = 1.0          # m/s max avoidance velocity
-SAFE_DISTANCE = 0.5      # m — obstacle proximity for slowdown
+MAX_SPEED = 0.5          # m/s max avoidance velocity
+SAFE_DISTANCE = 1.0      # m — obstacle proximity for slowdown
 CONTROL_HZ = 10          # avoidance loop rate
 WAYPOINT_TOL = 0.4       # m — switch to next waypoint within this distance
 
@@ -199,24 +199,31 @@ def fly_with_avoidance(waypoints):
                 print(f"  Reached! dist={dist:.2f}")
                 break
 
-            # Goal direction
-            goal = (wx - px, wy - py, wz - pz)
+            # Goal direction in NED, convert to body FLU for VFH3D
+            # Body FLU: X=forward, Y=left, Z=up
+            # NED:      X=north,   Y=east, Z=down
+            # When yaw≈0: body_x=ned_x, body_y=-ned_y, body_z=-ned_z
+            goal_ned = (wx - px, wy - py, wz - pz)
+            goal_body = (goal_ned[0], -goal_ned[1], -goal_ned[2])
 
-            # Get obstacle points
+            # Get obstacle points (already in body FLU frame)
             pts = tof.get_obstacle_points(max_range=4.0)
 
-            # Compute velocity
+            # Compute velocity in body frame
             if len(pts) > 0:
-                vel = vfh.update(pts, goal)
+                vel_body = vfh.update(pts, goal_body)
             else:
-                goal_dist = math.sqrt(goal[0]**2 + goal[1]**2 + goal[2]**2)
+                goal_dist = math.sqrt(goal_ned[0]**2 + goal_ned[1]**2 + goal_ned[2]**2)
                 if goal_dist > 0.01:
                     scale = min(MAX_SPEED, goal_dist) / goal_dist
-                    vel = (goal[0] * scale, goal[1] * scale, goal[2] * scale)
+                    vel_body = (goal_body[0] * scale, goal_body[1] * scale, goal_body[2] * scale)
                 else:
-                    vel = (0.0, 0.0, 0.0)
+                    vel_body = (0.0, 0.0, 0.0)
 
-            # Send velocity command directly
+            # Convert velocity back from body FLU to NED
+            vel = (vel_body[0], -vel_body[1], -vel_body[2])
+
+            # Send velocity command in NED
             try:
                 set_vel(vel[0], vel[1], vel[2])
             except Exception:
