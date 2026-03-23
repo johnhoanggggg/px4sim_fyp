@@ -22,6 +22,7 @@ from pymavlink import mavutil
 
 from tof_reader import TofReader
 from vfh3d import VFH3D
+from gz_markers import GzMarkerViz
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -81,6 +82,7 @@ vfh = VFH3D(
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
 )
+viz = GzMarkerViz()
 
 # ---------------------------------------------------------------------------
 # MAVLink helpers
@@ -218,6 +220,10 @@ def fly_with_avoidance(waypoints):
             if len(pts) > 0:
                 not_ground = pts[:, 2] > -1.0  # keep pts above 1m below drone
                 pts = pts[not_ground]
+
+            # Visualize obstacle points in Gazebo
+            if len(pts) > 0:
+                viz.update(pts, (px, py, pz))
 
             # Compute velocity in body frame
             if len(pts) > 0:
