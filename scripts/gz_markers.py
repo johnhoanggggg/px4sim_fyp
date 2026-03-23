@@ -80,15 +80,44 @@ class GzMarkerViz:
         ned_x = px + c * frd_x - s * frd_y
         ned_y = py + s * frd_x + c * frd_y
         ned_z = pz + frd_z
-        # NED → Gazebo ENU: gz_x=ned_y(east), gz_y=ned_x(north), gz_z=-ned_z(up)
+        # NED → Gazebo ENU: gz_x=east=ned_y, gz_y=north=ned_x, gz_z=up=-ned_z
         gz_x = ned_y
         gz_y = ned_x
         gz_z = -ned_z
+
 
         dists = np.sqrt(bx**2 + by**2 + bz**2)
         t = np.clip((dists - 0.3) / 2.7, 0.0, 1.0)
 
         batch = Marker_V()
+
+        # Debug: blue marker at drone position to verify NED→Gazebo mapping
+        dm = batch.marker.add()
+        dm.ns = self._ns + "_drone"
+        dm.id = 0
+        dm.action = Marker.ADD_MODIFY
+        dm.type = Marker.SPHERE
+        dm.pose.position.x = py   # ENU: gz_x = ned_y (east)
+        dm.pose.position.y = px   # ENU: gz_y = ned_x (north)
+        dm.pose.position.z = -pz  # ENU: gz_z = -ned_z (up)
+        # If blue ball does NOT follow the drone, try NO swap instead:
+        # dm.pose.position.x = px
+        # dm.pose.position.y = py
+        # dm.pose.position.z = -pz
+        dm.scale.x = 0.3
+        dm.scale.y = 0.3
+        dm.scale.z = 0.3
+        dm.material.ambient.r = 0.0
+        dm.material.ambient.g = 0.0
+        dm.material.ambient.b = 1.0
+        dm.material.ambient.a = 1.0
+        dm.material.diffuse.r = 0.0
+        dm.material.diffuse.g = 0.0
+        dm.material.diffuse.b = 1.0
+        dm.material.diffuse.a = 1.0
+        dm.lifetime.sec = 1
+        dm.lifetime.nsec = 0
+
         for i in range(n):
             m = batch.marker.add()
             m.ns = self._ns
