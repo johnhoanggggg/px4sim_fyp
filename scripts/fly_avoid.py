@@ -61,6 +61,7 @@ TARGET_COMP = recv.target_component
 # Shared state
 # ---------------------------------------------------------------------------
 running = True
+avoidance_enabled = False        # disabled until airborne
 current_pos = [0.0, 0.0, 0.0]   # NED position
 current_vel_cmd = [0.0, 0.0, 0.0]  # velocity command from avoidance
 pos_lock = threading.Lock()
@@ -149,9 +150,16 @@ def avoidance_loop():
     Main avoidance control loop at CONTROL_HZ.
 
     Reads sensor data, computes VFH3D velocity, sends commands.
+    Only active when avoidance_enabled is True; otherwise sends
+    position setpoints so takeoff works normally.
     """
     dt = 1.0 / CONTROL_HZ
     while running:
+        if not avoidance_enabled:
+            # Not yet airborne — let main thread handle position control
+            time.sleep(dt)
+            continue
+
         # Current position
         with pos_lock:
             px, py, pz = current_pos[0], current_pos[1], current_pos[2]
@@ -306,8 +314,31 @@ try:
         0, 1, 21196, 0, 0, 0, 0, 0)
     time.sleep(2)
 
-    # Fly waypoints with avoidance
+    # --- Takeoff using position control (no avoidance yet) ---
+    print("\n>>> Takeoff to truss altitude using position control...")
+    takeoff_z = WAYPOINTS[0][2]  # -1.5 NED
+    t0 = time.time()
+    while time.time() - t0 < 15:
+        send_position(0, 0, takeoff_z)
+        with pos_lock:
+            pz = current_pos[2]
+        alt = -pz
+        print(f"  Climbing... alt={alt:.2f}m  target={-takeoff_z:.2f}m")
+        if abs(pz - takeoff_z) < 0.3:
+            print("  Takeoff altitude reached!")
+            break
+        time.sleep(0.5)
+
+    # --- Enable VFH3D avoidance now that we're airborne ---
+    print("Enabling VFH3D obstacle avoidance...")
+    avoidance_enabled = True
+    vfh.reset()  # clear any stale histogram from ground readings
+    time.sleep(0.5)
+
+    # Fly waypoints with avoidance (skip first waypoint if it's just takeoff alt)
     for i, (x, y, z, label) in enumerate(WAYPOINTS):
+        if i == 0:
+            continue  # already at takeoff altitude
         with wp_lock:
             waypoint_idx = i
         print(f"\n>>> [{i+1}/{len(WAYPOINTS)}] {label}")
@@ -315,7 +346,8 @@ try:
         print(f"  Holding for 2s...")
         time.sleep(2)
 
-    # Mark mission complete
+    # Mark mission complete, disable avoidance for landing
+    avoidance_enabled = False
     with wp_lock:
         waypoint_idx = len(WAYPOINTS)
 
@@ -324,6 +356,7 @@ try:
 
 except KeyboardInterrupt:
     print("\nInterrupted! Landing...")
+    avoidance_enabled = False
     land_and_disarm()
 finally:
     shutdown()
