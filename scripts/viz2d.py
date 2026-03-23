@@ -51,11 +51,17 @@ DRONE_SIZE = 0.4
 TRAIL_MAX = 2000
 
 
-def _body_to_ned(az_body, yaw):
-    """Convert body-FLU azimuth to NED (north, east) unit direction."""
+def _body_flu_to_ned(az_body, yaw):
+    """Convert body-FLU azimuth to NED (north, east) unit direction.
+
+    Body FLU: X=forward, Y=left.  NED: X=north, Y=east.
+    Since left = -east, the Y signs flip vs the FRD→NED rotation.
+    """
+    bx = math.cos(az_body)
+    by = math.sin(az_body)
     c_yaw, s_yaw = math.cos(yaw), math.sin(yaw)
-    dn = math.cos(az_body) * c_yaw - math.sin(az_body) * s_yaw
-    de = math.cos(az_body) * s_yaw + math.sin(az_body) * c_yaw
+    dn = bx * c_yaw + by * s_yaw
+    de = bx * s_yaw - by * c_yaw
     return dn, de
 
 
@@ -128,7 +134,7 @@ def run_viz(queue: mp.Queue):
         drone_marker.set_data([de], [dn])
 
         # Heading indicator
-        h_dn, h_de = _body_to_ned(0.0, yaw)  # forward direction
+        h_dn, h_de = _body_flu_to_ned(0.0, yaw)  # forward direction
         heading_line.set_data(
             [de, de + DRONE_SIZE * h_de],
             [dn, dn + DRONE_SIZE * h_dn])
@@ -144,7 +150,7 @@ def run_viz(queue: mp.Queue):
         # Bin lines — separate into free and blocked segments
         free_segs, blocked_segs = [], []
         for az_body, blocked in bins:
-            b_dn, b_de = _body_to_ned(az_body, yaw)
+            b_dn, b_de = _body_flu_to_ned(az_body, yaw)
             seg = [(de, dn), (de + BIN_LINE_LEN * b_de, dn + BIN_LINE_LEN * b_dn)]
             if blocked:
                 blocked_segs.append(seg)
@@ -156,7 +162,7 @@ def run_viz(queue: mp.Queue):
 
         # Chosen direction
         if chosen is not None:
-            c_dn, c_de = _body_to_ned(chosen, yaw)
+            c_dn, c_de = _body_flu_to_ned(chosen, yaw)
             chosen_line.set_data(
                 [de, de + ARROW_LEN * c_de],
                 [dn, dn + ARROW_LEN * c_dn])
