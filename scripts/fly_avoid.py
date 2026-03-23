@@ -209,28 +209,27 @@ def fly_with_avoidance(waypoints):
                 print(f"  Reached! dist={dist:.2f}")
                 break
 
-            # Goal direction in NED, convert to body FLU for VFH3D
-            # Body FLU: X=forward, Y=left, Z=up
-            # NED:      X=north,   Y=east, Z=down
-            # When yaw≈0: body_x=ned_x, body_y=-ned_y, body_z=-ned_z
+            # Read yaw for frame conversions
+            yaw = get_yaw()
+            c_yaw, s_yaw = math.cos(yaw), math.sin(yaw)
+
+            # Goal direction in NED → rotate to body FRD → convert to FLU
             goal_ned = (wx - px, wy - py, wz - pz)
-            goal_body = (goal_ned[0], -goal_ned[1], -goal_ned[2])
+            # NED to body FRD (inverse yaw rotation)
+            frd_x =  c_yaw * goal_ned[0] + s_yaw * goal_ned[1]
+            frd_y = -s_yaw * goal_ned[0] + c_yaw * goal_ned[1]
+            frd_z = goal_ned[2]
+            # FRD to FLU: (x, -y, -z)
+            goal_body = (frd_x, -frd_y, -frd_z)
 
             # Get obstacle points (already in body FLU frame)
             pts = tof.get_obstacle_points(max_range=4.0)
 
-            # Filter out ground/floor detections: remove points that are
-            # below the drone by more than the target flight altitude minus
-            # a safety margin.  In body FLU, Z>0 is up, Z<0 is below.
-            # Keep the ground filter simple: remove points pointing mostly
-            # downward (body Z < -1.0m) — the drone should maintain altitude
-            # via its goal, not treat the ground as an obstacle to dodge.
+            # Filter out ground detections (body Z < -1.0m)
             if len(pts) > 0:
-                not_ground = pts[:, 2] > -1.0  # keep pts above 1m below drone
-                pts = pts[not_ground]
+                pts = pts[pts[:, 2] > -1.0]
 
             # Visualize obstacle points in Gazebo
-            yaw = get_yaw()
             if len(pts) > 0:
                 viz.update(pts, (px, py, pz), yaw)
 
@@ -245,8 +244,15 @@ def fly_with_avoidance(waypoints):
                 else:
                     vel_body = (0.0, 0.0, 0.0)
 
-            # Convert velocity back from body FLU to NED
-            vel = (vel_body[0], -vel_body[1], -vel_body[2])
+            # Convert velocity: body FLU → FRD → rotate by yaw → NED
+            frd_x_out = vel_body[0]
+            frd_y_out = -vel_body[1]   # FLU to FRD
+            frd_z_out = -vel_body[2]
+            vel = (
+                c_yaw * frd_x_out - s_yaw * frd_y_out,  # NED x
+                s_yaw * frd_x_out + c_yaw * frd_y_out,  # NED y
+                frd_z_out,                                # NED z
+            )
 
             # Send velocity command in NED
             try:

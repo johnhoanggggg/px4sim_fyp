@@ -78,10 +78,10 @@ class GzMarkerViz:
         ned_y = py + ned_dy
         ned_z = pz + ned_dz
 
-        # Step 3: NED → Gazebo (try direct mapping: gz=ned with z flip)
-        # PX4 SITL Gazebo: gz_x=ned_x, gz_y=ned_y, gz_z=-ned_z
-        gz_x = ned_x
-        gz_y = ned_y
+        # Step 3: NED → Gazebo ENU
+        # Gazebo world is ENU: gz_x=east=ned_y, gz_y=north=ned_x, gz_z=up=-ned_z
+        gz_x = ned_y
+        gz_y = ned_x
         gz_z = -ned_z
 
         dists = np.sqrt(bx**2 + by**2 + bz**2)
