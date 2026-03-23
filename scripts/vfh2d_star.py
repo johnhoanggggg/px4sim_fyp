@@ -33,7 +33,11 @@ class VFH2DStar:
     drone_radius : float
         Physical radius for obstacle enlargement.
     enlarge_bins : int
-        Spread blocked bins ± this many neighbours.
+        Default spread of blocked bins ± this many neighbours.
+    enlarge_close_bins : int
+        Spread when obstacle distance < enlarge_close_threshold (more conservative).
+    enlarge_close_threshold : float
+        Distance (m) below which enlarge_close_bins is used instead of enlarge_bins.
     lookahead_depth : int
         How many steps to project forward (1 = plain VFH, 2-3 recommended).
     step_distance : float
@@ -53,6 +57,8 @@ class VFH2DStar:
         max_speed: float = 0.5,
         drone_radius: float = 0.35,
         enlarge_bins: int = 2,
+        enlarge_close_bins: int = 4,
+        enlarge_close_threshold: float = 0.5,
         lookahead_depth: int = 3,
         step_distance: float = 0.8,
         goal_weight: float = 1.0,
@@ -65,6 +71,8 @@ class VFH2DStar:
         self.max_speed = max_speed
         self.drone_radius = drone_radius
         self.enlarge_bins = enlarge_bins
+        self.enlarge_close_bins = enlarge_close_bins
+        self.enlarge_close_threshold = enlarge_close_threshold
         self.lookahead_depth = lookahead_depth
         self.step_distance = step_distance
         self.goal_weight = goal_weight
@@ -267,19 +275,53 @@ class VFH2DStar:
         # don't have temporal state there)
         blocked = hist >= self.threshold_high
 
-        # Obstacle enlargement
-        if self.enlarge_bins > 0:
-            enlarged = blocked.copy()
-            for offset in range(1, self.enlarge_bins + 1):
-                enlarged |= np.roll(blocked, offset)
-                enlarged |= np.roll(blocked, -offset)
-            blocked = enlarged
+        # Adaptive obstacle enlargement
+        blocked = self._adaptive_enlarge(blocked, rel, dist)
 
         return blocked
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _adaptive_enlarge(self, blocked: np.ndarray, obs_rel: np.ndarray,
+                          obs_dist: np.ndarray) -> np.ndarray:
+        """Enlarge blocked bins adaptively — more enlargement for closer obstacles.
+
+        For each blocked bin, find the minimum obstacle distance that falls in
+        that bin.  If min distance < enlarge_close_threshold, use
+        enlarge_close_bins; otherwise use the default enlarge_bins.
+        """
+        if self.enlarge_bins <= 0 and self.enlarge_close_bins <= 0:
+            return blocked
+
+        enlarged = blocked.copy()
+
+        if len(obs_rel) == 0 or not np.any(blocked):
+            # No distance info — fall back to uniform enlargement
+            for offset in range(1, self.enlarge_bins + 1):
+                enlarged |= np.roll(blocked, offset)
+                enlarged |= np.roll(blocked, -offset)
+            return enlarged
+
+        # Compute per-bin minimum distance
+        azimuth = np.arctan2(obs_rel[:, 1], obs_rel[:, 0])
+        idx = ((azimuth + math.pi) / self.res).astype(int) % self.n_bins
+        min_dist_per_bin = np.full(self.n_bins, np.inf)
+        np.minimum.at(min_dist_per_bin, idx, obs_dist)
+
+        for b in range(self.n_bins):
+            if not blocked[b]:
+                continue
+            if min_dist_per_bin[b] < self.enlarge_close_threshold:
+                spread = self.enlarge_close_bins
+            else:
+                spread = self.enlarge_bins
+            for offset in range(1, spread + 1):
+                enlarged[(b + offset) % self.n_bins] = True
+                enlarged[(b - offset) % self.n_bins] = True
+
+        return enlarged
 
     def _apply_hysteresis(self, histogram_blocked: np.ndarray):
         """In-place hysteresis on the level-0 histogram using stored state."""
@@ -300,13 +342,16 @@ class VFH2DStar:
         newly = ~self._blocked & (hist >= self.threshold_high)
         result = still | newly
 
-        # Enlarge
-        if self.enlarge_bins > 0:
-            enlarged = result.copy()
-            for offset in range(1, self.enlarge_bins + 1):
-                enlarged |= np.roll(result, offset)
-                enlarged |= np.roll(result, -offset)
-            result = enlarged
+        # Adaptive enlargement using obstacle distances at level-0
+        if len(self._obs_xy) > 0:
+            dist = np.sqrt(self._obs_xy[:, 0]**2 + self._obs_xy[:, 1]**2)
+            mask = dist > 0.05
+            if np.any(mask):
+                result = self._adaptive_enlarge(result, self._obs_xy[mask], dist[mask])
+            else:
+                result = self._adaptive_enlarge(result, np.empty((0, 2)), np.empty(0))
+        else:
+            result = self._adaptive_enlarge(result, np.empty((0, 2)), np.empty(0))
 
         histogram_blocked[:] = result
 
