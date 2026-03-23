@@ -13,8 +13,15 @@ import math
 import threading
 import numpy as np
 
-from gz.transport import Node
-from gz.msgs.laserscan_pb2 import LaserScan
+try:
+    from gz.transport import Node
+except ImportError:
+    from gz.transport13 import Node
+
+try:
+    from gz.msgs.laserscan_pb2 import LaserScan
+except ImportError:
+    from gz.msgs10.laserscan_pb2 import LaserScan
 
 # ---------------------------------------------------------------------------
 # Sensor geometry (from model.sdf)
