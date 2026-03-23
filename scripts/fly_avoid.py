@@ -55,6 +55,13 @@ send = mavutil.mavlink_connection('udpout:127.0.0.1:14580',
 TARGET_SYS = recv.target_system
 TARGET_COMP = recv.target_component
 
+# Request position stream at 10Hz on the recv channel
+recv.mav.request_data_stream_send(
+    TARGET_SYS, TARGET_COMP,
+    mavutil.mavlink.MAV_DATA_STREAM_POSITION,
+    10, 1)
+time.sleep(0.5)
+
 # ---------------------------------------------------------------------------
 # Shared state
 # ---------------------------------------------------------------------------
