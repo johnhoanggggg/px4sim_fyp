@@ -155,16 +155,26 @@ class VFH3D:
         return (float(best_dir[0]), float(best_dir[1]), float(best_dir[2]))
 
     def _compute_speed(self, pts: np.ndarray) -> float:
-        """Scale speed based on closest obstacle distance."""
+        """Scale speed based on closest obstacle in the horizontal plane.
+        Only considers obstacles within ±30° of horizontal so that
+        ground/ceiling detections don't throttle lateral speed."""
         if len(pts) == 0:
             return self.max_speed
 
-        dists = np.linalg.norm(pts, axis=1)
+        # Filter to near-horizontal obstacles only
+        horiz_dist = np.sqrt(pts[:, 0]**2 + pts[:, 1]**2)
+        vert = np.abs(pts[:, 2])
+        elevation = np.arctan2(vert, np.clip(horiz_dist, 0.01, None))
+        horiz_mask = elevation < math.radians(30)
+
+        if not np.any(horiz_mask):
+            return self.max_speed
+
+        dists = np.linalg.norm(pts[horiz_mask], axis=1)
         min_dist = float(np.min(dists))
 
         if min_dist < self.safe_distance:
-            # Very close: slow down proportionally
-            return self.max_speed * max(min_dist / self.safe_distance, 0.1)
+            return self.max_speed * max(min_dist / self.safe_distance, 0.3)
         return self.max_speed
 
     def reset(self):

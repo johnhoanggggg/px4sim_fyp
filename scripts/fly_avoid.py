@@ -26,7 +26,7 @@ from vfh3d import VFH3D
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MAX_SPEED = 0.5          # m/s max avoidance velocity
+MAX_SPEED = 1.0          # m/s max avoidance velocity
 SAFE_DISTANCE = 0.5      # m — obstacle proximity for slowdown
 CONTROL_HZ = 10          # avoidance loop rate
 WAYPOINT_TOL = 0.4       # m — switch to next waypoint within this distance
@@ -89,9 +89,10 @@ vfh = VFH3D(
 
 def send_velocity(vx, vy, vz, yaw=0.0):
     """Send velocity setpoint in NED frame."""
-    # type_mask: ignore position (bits 0-2), use velocity (bits 3-5 = 0),
-    # ignore acceleration (bits 6-8), use yaw (bit 10 = 0), ignore yaw rate (bit 11)
-    type_mask = 0b0000_1100_0000_0111
+    # type_mask bits: 0-2=pos, 3-5=vel, 6-8=accel, 9=force, 10=yaw, 11=yaw_rate
+    # ignore position (0-2), USE velocity (3-5), ignore accel (6-8),
+    # no force (9), USE yaw (10), ignore yaw_rate (11)
+    type_mask = 0b0000_1001_1100_0111  # 0x09C7
     send.mav.set_position_target_local_ned_send(
         0, TARGET_SYS, TARGET_COMP,
         mavutil.mavlink.MAV_FRAME_LOCAL_NED,
