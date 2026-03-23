@@ -223,7 +223,7 @@ def fly_with_avoidance(waypoints):
             goal_body = (frd_x, -frd_y, -frd_z)
 
             # Get obstacle points (already in body FLU frame)
-            pts = tof.get_obstacle_points(max_range=4.0)
+            pts = tof.get_obstacle_points(max_range=2.0)
 
             # Filter out ground detections (body Z < -1.0m)
             if len(pts) > 0:
