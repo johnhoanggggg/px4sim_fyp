@@ -57,11 +57,11 @@ class GzMarkerViz:
         n = len(pts)
 
         # Body FLU -> NED (yaw≈0): ned = drone + (bx, -by, -bz)
-        # NED -> Gazebo ENU: enu_x=ned_y, enu_y=ned_x, enu_z=-ned_z
+        # NED -> Gazebo: gz_x=ned_x, gz_y=ned_y, gz_z=-ned_z
         bx, by, bz = pts[:, 0], pts[:, 1], pts[:, 2]
-        gz_x = py + (-by)       # ENU east  = NED y + body(-by)
-        gz_y = px + bx           # ENU north = NED x + body(bx)
-        gz_z = -(pz + (-bz))    # ENU up    = -(NED z + body(-bz))
+        gz_x = px + bx
+        gz_y = py + (-by)
+        gz_z = -(pz + (-bz))
 
         dists = np.sqrt(bx**2 + by**2 + bz**2)
         t = np.clip((dists - 0.3) / 2.7, 0.0, 1.0)
