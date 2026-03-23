@@ -3,14 +3,13 @@
 Publish Gazebo marker messages to visualize obstacle points in the 3D viewport.
 
 Uses gz-transport /marker_array service to batch-draw colored spheres at
-obstacle points detected by the ToF sensors. Red=close, green=far.
+obstacle points. Red=close, green=far.
 
-Coordinate frames:
-  - Gazebo world: ENU (x=east, y=north, z=up)
-  - PX4 NED:      x=north, y=east, z=down
-  - Body FLU:     x=forward, y=left, z=up (at yaw=0: fwd=north)
+Frame chain:
+  Body FLU (sensors) → rotate by yaw → NED world → Gazebo world
 """
 
+import math
 import numpy as np
 
 try:
@@ -37,13 +36,15 @@ class GzMarkerViz:
         self._node = Node()
         self._prev_count = 0
 
-    def update(self, obstacle_pts_body: np.ndarray, drone_pos_ned: tuple):
+    def update(self, obstacle_pts_body: np.ndarray, drone_pos_ned: tuple,
+               yaw: float = 0.0):
         """
-        Draw obstacle points in Gazebo world frame (single batch call).
+        Draw obstacle points in Gazebo world frame.
 
         Args:
             obstacle_pts_body: (N,3) points in body FLU frame.
             drone_pos_ned: (px, py, pz) drone position in NED.
+            yaw: drone heading in radians (NED convention, 0=north, CW positive).
         """
         px, py, pz = drone_pos_ned
         n_pts = len(obstacle_pts_body)
@@ -56,12 +57,32 @@ class GzMarkerViz:
             pts = obstacle_pts_body
         n = len(pts)
 
-        # Body FLU -> NED (yaw≈0): ned = drone + (bx, -by, -bz)
-        # NED -> Gazebo: gz_x=ned_x, gz_y=ned_y, gz_z=-ned_z
+        # Step 1: Body FLU → NED using yaw rotation
+        # FLU: x=forward, y=left, z=up
+        # First convert FLU to FRD (PX4 body): frd = (flu_x, -flu_y, -flu_z)
+        # Then rotate FRD by yaw to NED: R_yaw * frd
+        # Combined: NED = R_yaw * (bx, -by, -bz)
+        c, s = math.cos(yaw), math.sin(yaw)
         bx, by, bz = pts[:, 0], pts[:, 1], pts[:, 2]
-        gz_x = px + bx
-        gz_y = py + (-by)
-        gz_z = -(pz + (-bz))
+        # FLU to FRD
+        frd_x = bx
+        frd_y = -by
+        frd_z = -bz
+        # Rotate by yaw (NED yaw: 0=north, positive=clockwise)
+        ned_dx = c * frd_x - s * frd_y
+        ned_dy = s * frd_x + c * frd_y
+        ned_dz = frd_z
+
+        # Step 2: Add drone position (NED)
+        ned_x = px + ned_dx
+        ned_y = py + ned_dy
+        ned_z = pz + ned_dz
+
+        # Step 3: NED → Gazebo (try direct mapping: gz=ned with z flip)
+        # PX4 SITL Gazebo: gz_x=ned_x, gz_y=ned_y, gz_z=-ned_z
+        gz_x = ned_x
+        gz_y = ned_y
+        gz_z = -ned_z
 
         dists = np.sqrt(bx**2 + by**2 + bz**2)
         t = np.clip((dists - 0.3) / 2.7, 0.0, 1.0)
@@ -92,7 +113,7 @@ class GzMarkerViz:
             m.lifetime.sec = 1
             m.lifetime.nsec = 0
 
-        # Delete stale markers from previous frame
+        # Delete stale markers
         for i in range(n, self._prev_count):
             m = batch.marker.add()
             m.ns = self._ns
@@ -100,8 +121,6 @@ class GzMarkerViz:
             m.action = Marker.DELETE_MARKER
 
         self._prev_count = n
-
-        # Single batch service call
         self._node.request("/marker_array", batch, Marker_V, Boolean, 200)
 
     def clear(self):

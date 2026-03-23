@@ -113,11 +113,19 @@ def set_vel(vx, vy, vz, yaw=0.0):
 
 
 def get_position():
-    """Read latest position from PX4 (call from main thread only)."""
+    """Read latest position and heading from PX4 (call from main thread only)."""
     msg = recv.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=1)
     if msg:
         return msg.x, msg.y, msg.z
     return None
+
+
+def get_yaw():
+    """Read latest yaw (heading) from PX4."""
+    msg = recv.recv_match(type='ATTITUDE', blocking=False)
+    if msg:
+        return msg.yaw
+    return 0.0
 
 # ---------------------------------------------------------------------------
 # Background threads — only use 'send', never 'recv'
@@ -222,8 +230,9 @@ def fly_with_avoidance(waypoints):
                 pts = pts[not_ground]
 
             # Visualize obstacle points in Gazebo
+            yaw = get_yaw()
             if len(pts) > 0:
-                viz.update(pts, (px, py, pz))
+                viz.update(pts, (px, py, pz), yaw)
 
             # Compute velocity in body frame
             if len(pts) > 0:
@@ -249,7 +258,7 @@ def fly_with_avoidance(waypoints):
             if len(pts) > 0:
                 dists_obs = np.sqrt(pts[:, 0]**2 + pts[:, 1]**2 + pts[:, 2]**2)
                 min_obs = float(np.min(dists_obs))
-            print(f"  pos: ({px:.2f},{py:.2f},{-pz:.2f}m up) dist:{dist:.2f} "
+            print(f"  pos: ({px:.2f},{py:.2f},{-pz:.2f}m up) dist:{dist:.2f} yaw:{math.degrees(yaw):.0f}° "
                   f"vel: ({vel[0]:.2f},{vel[1]:.2f},{vel[2]:.2f}) obs:{len(pts)} "
                   f"min_obs:{min_obs:.2f}")
             time.sleep(1.0 / CONTROL_HZ)
