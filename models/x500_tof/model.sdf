@@ -13,7 +13,7 @@
         <gz_frame_id>tof_0_link</gz_frame_id>
         <pose relative_to="base_link">0.250 0.000 0 0 0 0</pose>
         <update_rate>12</update_rate>
-        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
         <topic>/tof/0</topic>
@@ -29,7 +29,7 @@
         <gz_frame_id>tof_1_link</gz_frame_id>
         <pose relative_to="base_link">0.202 0.147 0 0 0 0.6283</pose>
         <update_rate>12</update_rate>
-        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
         <topic>/tof/1</topic>
@@ -45,7 +45,7 @@
         <gz_frame_id>tof_2_link</gz_frame_id>
         <pose relative_to="base_link">0.077 0.238 0 0 0 1.2566</pose>
         <update_rate>12</update_rate>
-        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
         <topic>/tof/2</topic>
@@ -61,7 +61,7 @@
         <gz_frame_id>tof_3_link</gz_frame_id>
         <pose relative_to="base_link">-0.077 0.238 0 0 0 1.8850</pose>
         <update_rate>12</update_rate>
-        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
         <topic>/tof/3</topic>
@@ -77,7 +77,7 @@
         <gz_frame_id>tof_4_link</gz_frame_id>
         <pose relative_to="base_link">-0.202 0.147 0 0 0 2.5133</pose>
         <update_rate>12</update_rate>
-        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
         <topic>/tof/4</topic>
@@ -93,7 +93,7 @@
         <gz_frame_id>tof_5_link</gz_frame_id>
         <pose relative_to="base_link">-0.250 0.000 0 0 0 3.1416</pose>
         <update_rate>12</update_rate>
-        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
         <topic>/tof/5</topic>
@@ -109,7 +109,7 @@
         <gz_frame_id>tof_6_link</gz_frame_id>
         <pose relative_to="base_link">-0.202 -0.147 0 0 0 -2.5133</pose>
         <update_rate>12</update_rate>
-        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
         <topic>/tof/6</topic>
@@ -125,7 +125,7 @@
         <gz_frame_id>tof_7_link</gz_frame_id>
         <pose relative_to="base_link">-0.077 -0.238 0 0 0 -1.8850</pose>
         <update_rate>12</update_rate>
-        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
         <topic>/tof/7</topic>
@@ -141,7 +141,7 @@
         <gz_frame_id>tof_8_link</gz_frame_id>
         <pose relative_to="base_link">0.077 -0.238 0 0 0 -1.2566</pose>
         <update_rate>12</update_rate>
-        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
         <topic>/tof/8</topic>
@@ -157,7 +157,7 @@
         <gz_frame_id>tof_9_link</gz_frame_id>
         <pose relative_to="base_link">0.202 -0.147 0 0 0 -0.6283</pose>
         <update_rate>12</update_rate>
-        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
         <topic>/tof/9</topic>
@@ -173,7 +173,7 @@
         <gz_frame_id>tof_up_link</gz_frame_id>
         <pose relative_to="base_link">0 0 0.05 0 -1.5708 0</pose>
         <update_rate>12</update_rate>
-        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
         <topic>/tof/up</topic>
@@ -189,7 +189,7 @@
         <gz_frame_id>tof_down_link</gz_frame_id>
         <pose relative_to="base_link">0 0 -0.05 0 1.5708 0</pose>
         <update_rate>12</update_rate>
-        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>4.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
+        <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
         <topic>/tof/down</topic>
