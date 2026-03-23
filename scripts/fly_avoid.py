@@ -77,8 +77,8 @@ target_lock = threading.Lock()
 tof = TofReader()
 vfh = VFH3D(
     resolution_deg=10,
-    threshold_low=0.3,
-    threshold_high=0.6,
+    threshold_low=0.2,
+    threshold_high=0.4,
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
 )
