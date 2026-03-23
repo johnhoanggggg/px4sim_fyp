@@ -30,17 +30,18 @@ from viz2d import run_viz
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MAX_SPEED = 0.4
-SAFE_DISTANCE = 1.2
+MAX_SPEED = 0.8
+SAFE_DISTANCE = 0.8
 CONTROL_HZ = 10
 WAYPOINT_TOL = 0.5
+VEL_SMOOTH = 0.3          # EMA alpha: 0=frozen, 1=instant.  0.3 ≈ 3-tick ramp
 
 # Waypoints in NED (north, east, down, label)
 WAYPOINTS = [
     (0.0,   0.0, -1.5, "Takeoff"),
     (2.0,   0.0, -1.5, "Through first gap"),
     (8.0,   1.0, -1.5, "Weave right"),
-    (11.0,  0.0, -1.5, "Far end"),
+    (12.0,  0.0, -1.5, "Far end"),
     (8.0,  -1.0, -1.5, "Weave back left"),
     (5.0,   0.0, -1.5, "Return through gap"),
     (0.0,   0.0, -1.5, "Home"),
@@ -79,13 +80,13 @@ target_lock = threading.Lock()
 tof = TofReader()
 fgm = FGM2D(
     n_rays=72,
-    max_range=3.0,
-    bubble_radius=0.55,
+    max_range=1.5,
+    bubble_radius=0.3,
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
-    gap_weight_goal=1.0,
+    gap_weight_goal=2.0,
     gap_weight_width=0.3,
-    min_gap_width_deg=20.0,
+    min_gap_width_deg=10.0,
     edge_margin_deg=10.0,
 )
 
@@ -214,6 +215,8 @@ def fly_with_avoidance(waypoints, wp_offset=0):
     global use_pos_setpoints
     use_pos_setpoints = False
 
+    prev_vel_ned = (0.0, 0.0)   # for EMA smoothing across waypoints
+
     for i, (wx, wy, wz, label) in enumerate(waypoints):
         wp_idx = i + wp_offset
         print(f"\n>>> [{wp_idx+1}/{len(WAYPOINTS)}] {label}  (FGM)")
@@ -239,7 +242,7 @@ def fly_with_avoidance(waypoints, wp_offset=0):
             goal_body = (frd_x, -frd_y)  # FRD→FLU: negate y
 
             # Obstacles
-            pts = tof.get_obstacle_points(max_range=3.0)
+            pts = tof.get_obstacle_points(max_range=1.5)
             if len(pts) > 0:
                 pts = pts[(pts[:, 2] > -0.5) & (pts[:, 2] < 1.0)]
 
@@ -257,10 +260,18 @@ def fly_with_avoidance(waypoints, wp_offset=0):
             # Body FLU (vx, vy) → NED
             frd_vx = vel_body[0]
             frd_vy = -vel_body[1]  # FLU→FRD
-            vel_ned = (
+            raw_ned = (
                 c_yaw * frd_vx - s_yaw * frd_vy,
                 s_yaw * frd_vx + c_yaw * frd_vy,
             )
+
+            # EMA smoothing — prevents snap-turns at waypoint transitions
+            a = VEL_SMOOTH
+            vel_ned = (
+                a * raw_ned[0] + (1 - a) * prev_vel_ned[0],
+                a * raw_ned[1] + (1 - a) * prev_vel_ned[1],
+            )
+            prev_vel_ned = vel_ned
 
             # Hold altitude via z velocity toward target
             vz = max(-0.5, min(0.5, (wz - pz) * 1.0))
