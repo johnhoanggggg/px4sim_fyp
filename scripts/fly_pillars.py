@@ -237,7 +237,10 @@ def fly_with_avoidance(waypoints, wp_offset=0):
             # Obstacles
             pts = tof.get_obstacle_points(max_range=2.0)
             if len(pts) > 0:
-                pts = pts[pts[:, 2] > -1.0]  # filter ground
+                # Keep only points near the drone's horizontal plane.
+                # Filter out ground hits (below) and ceiling/sky (above).
+                # At 1.5m altitude, ground-bounce rays have z ≈ -1.0 to -1.5
+                pts = pts[(pts[:, 2] > -0.5) & (pts[:, 2] < 1.0)]
 
             # VFH2D
             if len(pts) > 0:
