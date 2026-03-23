@@ -36,11 +36,11 @@ WAYPOINT_TOL = 0.5
 # Waypoints in NED (north, east, down, label)
 WAYPOINTS = [
     (0.0,   0.0, -1.5, "Takeoff"),
-    (4.0,   0.0, -1.5, "Through first gap"),
+    (2.0,   0.0, -1.5, "Through first gap"),
     (8.0,   1.0, -1.5, "Weave right"),
     (11.0,  0.0, -1.5, "Far end"),
     (8.0,  -1.0, -1.5, "Weave back left"),
-    (4.0,   0.0, -1.5, "Return through gap"),
+    (5.0,   0.0, -1.5, "Return through gap"),
     (0.0,   0.0, -1.5, "Home"),
 ]
 
@@ -78,11 +78,11 @@ tof = TofReader()
 vfh = VFH2D(
     resolution_deg=10,
     threshold_low=0.15,
-    threshold_high=0.3,
+    threshold_high=0.2,
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
-    drone_radius=0.35,
-    enlarge_bins=3,
+    drone_radius=0.5,
+    enlarge_bins=2,
 )
 
 # Visualizer (separate process)
