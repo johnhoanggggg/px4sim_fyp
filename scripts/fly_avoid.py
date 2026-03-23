@@ -62,10 +62,12 @@ TARGET_COMP = recv.target_component
 # ---------------------------------------------------------------------------
 running = True
 avoidance_enabled = False        # disabled until airborne
+pos_target = [0.0, 0.0, -1.0, 0.0]  # x, y, z, yaw — position setpoint for pre-avoidance
 current_pos = [0.0, 0.0, 0.0]   # NED position
 current_vel_cmd = [0.0, 0.0, 0.0]  # velocity command from avoidance
 pos_lock = threading.Lock()
 vel_lock = threading.Lock()
+target_lock = threading.Lock()
 waypoint_idx = 0
 wp_lock = threading.Lock()
 
@@ -119,6 +121,20 @@ def get_position():
 # ---------------------------------------------------------------------------
 # Background threads
 # ---------------------------------------------------------------------------
+
+def setpoint_loop():
+    """Stream position setpoints at 20Hz when avoidance is disabled.
+    Keeps PX4 in offboard mode during takeoff/landing."""
+    while running:
+        if not avoidance_enabled:
+            with target_lock:
+                x, y, z, yaw = pos_target
+            try:
+                send_position(x, y, z, yaw)
+            except Exception:
+                pass
+        time.sleep(0.05)
+
 
 def heartbeat_loop():
     """Send GCS heartbeat at 2 Hz."""
@@ -278,7 +294,7 @@ def shutdown():
 # ---------------------------------------------------------------------------
 try:
     # Start background threads
-    for fn in (heartbeat_loop, position_loop, avoidance_loop):
+    for fn in (setpoint_loop, heartbeat_loop, position_loop, avoidance_loop):
         t = threading.Thread(target=fn, daemon=True)
         t.start()
 
@@ -293,10 +309,9 @@ try:
         print("No ToF data yet — proceeding anyway (will use direct waypoint nav)")
 
     # Stream position setpoints for PX4 offboard mode requirement
+    # (setpoint_loop thread is already streaming pos_target at 20Hz)
     print("Streaming setpoints for 4s...")
-    for _ in range(80):
-        send_position(0, 0, -1.0)
-        time.sleep(0.05)
+    time.sleep(4)
 
     # Set OFFBOARD mode
     print("Setting OFFBOARD mode...")
@@ -317,9 +332,10 @@ try:
     # --- Takeoff using position control (no avoidance yet) ---
     print("\n>>> Takeoff to truss altitude using position control...")
     takeoff_z = WAYPOINTS[0][2]  # -1.5 NED
+    with target_lock:
+        pos_target[2] = takeoff_z
     t0 = time.time()
     while time.time() - t0 < 15:
-        send_position(0, 0, takeoff_z)
         with pos_lock:
             pz = current_pos[2]
         alt = -pz
