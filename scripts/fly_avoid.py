@@ -209,6 +209,16 @@ def fly_with_avoidance(waypoints):
             # Get obstacle points (already in body FLU frame)
             pts = tof.get_obstacle_points(max_range=4.0)
 
+            # Filter out ground/floor detections: remove points that are
+            # below the drone by more than the target flight altitude minus
+            # a safety margin.  In body FLU, Z>0 is up, Z<0 is below.
+            # Keep the ground filter simple: remove points pointing mostly
+            # downward (body Z < -1.0m) — the drone should maintain altitude
+            # via its goal, not treat the ground as an obstacle to dodge.
+            if len(pts) > 0:
+                not_ground = pts[:, 2] > -1.0  # keep pts above 1m below drone
+                pts = pts[not_ground]
+
             # Compute velocity in body frame
             if len(pts) > 0:
                 vel_body = vfh.update(pts, goal_body)
@@ -229,8 +239,13 @@ def fly_with_avoidance(waypoints):
             except Exception:
                 pass
 
+            min_obs = float('inf')
+            if len(pts) > 0:
+                dists_obs = np.sqrt(pts[:, 0]**2 + pts[:, 1]**2 + pts[:, 2]**2)
+                min_obs = float(np.min(dists_obs))
             print(f"  pos: ({px:.2f},{py:.2f},{-pz:.2f}m up) dist:{dist:.2f} "
-                  f"vel: ({vel[0]:.2f},{vel[1]:.2f},{vel[2]:.2f}) obs:{len(pts)}")
+                  f"vel: ({vel[0]:.2f},{vel[1]:.2f},{vel[2]:.2f}) obs:{len(pts)} "
+                  f"min_obs:{min_obs:.2f}")
             time.sleep(1.0 / CONTROL_HZ)
 
         # Brief hold at waypoint using position control
