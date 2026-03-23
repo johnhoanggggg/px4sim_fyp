@@ -22,9 +22,17 @@ px4sim_fyp/
 │       ├── model.config
 │       └── model.sdf             # Vehicle model with 12 ToF sensors
 ├── scripts/
-│   └── fly_truss.py              # Autonomous corridor flight script
+│   ├── fly_truss.py              # Autonomous corridor flight script
+│   ├── fly_pillars.py            # Pillar-field navigation with VFH2D avoidance
+│   ├── fly_avoid.py              # General obstacle-avoidance flight script
+│   ├── vfh2d.py                  # 2D Vector Field Histogram algorithm
+│   ├── vfh3d.py                  # 3D Vector Field Histogram algorithm
+│   ├── viz2d.py                  # Real-time 2D histogram visualizer
+│   ├── tof_reader.py             # ToF sensor data reader utility
+│   └── gz_markers.py             # Gazebo marker visualization helpers
 └── worlds/
-    └── truss.sdf                 # Gazebo truss corridor world
+    ├── truss.sdf                 # Gazebo truss corridor world
+    └── pillars.sdf               # Gazebo pillar-field world
 ```
 
 ## Prerequisites
@@ -98,6 +106,45 @@ Each sensor has:
 - **Range**: 0.02–4.0m
 - **Update rate**: 12 Hz
 - **Noise**: Gaussian, stddev=0.015m
+
+## VFH2D Obstacle Avoidance
+
+The `vfh2d.py` module implements a **2D Vector Field Histogram** for horizontal-plane obstacle avoidance using data from the ToF sensor ring.
+
+### How It Works
+
+1. **Histogram construction** — 3D obstacle points are projected onto the horizontal plane and binned into a 36-bin polar histogram (10° resolution). Closer obstacles receive higher weight.
+2. **Hysteresis thresholding** — bins transition between free/blocked using dual thresholds (`threshold_low` / `threshold_high`) to prevent flickering.
+3. **Obstacle enlargement** — blocked bins are dilated by ±`enlarge_bins` to account for the drone's physical radius (0.35m). Default is 3 bins (±30°).
+4. **Clearance-biased direction selection** — the algorithm picks the free bin closest to the goal, but applies a **clearance penalty** to bins near blocked sectors (up to 40° of extra cost). This prevents the drone from grazing obstacles by steering it toward directions with more open space on both sides.
+5. **Proximity speed scaling** — forward speed is reduced proportionally as obstacles get closer, down to 20% of max speed at the safe-distance threshold.
+
+### Key Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `resolution_deg` | 10° | Angular width of each histogram bin |
+| `threshold_low` | 0.15 | Hysteresis low threshold (bin stays blocked) |
+| `threshold_high` | 0.3 | Hysteresis high threshold (bin becomes blocked) |
+| `safe_distance` | 1.2m | Distance at which speed scaling begins |
+| `max_speed` | 0.4 m/s | Maximum horizontal speed |
+| `drone_radius` | 0.35m | Drone body radius for obstacle enlargement |
+| `enlarge_bins` | 3 | Blocked bins dilated ± this many bins |
+
+### Pillar-Field Navigation
+
+`fly_pillars.py` navigates through the `pillars.sdf` world using VFH2D:
+
+```bash
+# Terminal 1 — start PX4 SITL with pillar world
+cd ~/PX4-Autopilot
+PX4_GZ_WORLD=pillars make px4_sitl gz_x500_tof
+
+# Terminal 2 — run the avoidance script
+python3 ~/px4sim_fyp/scripts/fly_pillars.py
+```
+
+A real-time visualizer (`viz2d.py`) displays the polar histogram and chosen heading direction in a separate window during flight.
 
 ## Truss Corridor Dimensions
 
