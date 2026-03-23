@@ -152,13 +152,19 @@ def heartbeat_loop():
 
 def position_loop():
     """Read position from PX4 as fast as possible."""
+    miss_count = 0
     while running:
         pos = get_position()
         if pos:
+            miss_count = 0
             with pos_lock:
                 current_pos[0] = pos[0]
                 current_pos[1] = pos[1]
                 current_pos[2] = pos[2]
+        else:
+            miss_count += 1
+            if miss_count % 20 == 0:
+                print(f"[WARN] No LOCAL_POSITION_NED received ({miss_count} misses)")
         time.sleep(0.02)
 
 
