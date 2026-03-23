@@ -66,6 +66,7 @@ time.sleep(0.5)
 # Shared state
 # ---------------------------------------------------------------------------
 running = True
+use_pos_setpoints = True        # False during velocity-based avoidance
 target = [0.0, 0.0, -1.0, 0.0]  # x, y, z, yaw — shared setpoint
 target_lock = threading.Lock()
 
@@ -121,14 +122,15 @@ def get_position():
 # ---------------------------------------------------------------------------
 
 def setpoint_loop():
-    """Stream position setpoints at 20Hz. Keeps PX4 in offboard mode."""
+    """Stream position setpoints at 20Hz when use_pos_setpoints is True."""
     while running:
-        with target_lock:
-            x, y, z, yaw = target
-        try:
-            set_pos(x, y, z, yaw)
-        except Exception:
-            pass
+        if use_pos_setpoints:
+            with target_lock:
+                x, y, z, yaw = target
+            try:
+                set_pos(x, y, z, yaw)
+            except Exception:
+                pass
         time.sleep(0.05)
 
 
@@ -178,6 +180,8 @@ def fly_with_avoidance(waypoints):
     Runs on the main thread. Reads position from recv, reads ToF from
     tof_reader, computes VFH3D velocity, and overrides the setpoint.
     """
+    global use_pos_setpoints
+    use_pos_setpoints = False  # stop position setpoints, we send velocity
     for i, (wx, wy, wz, label) in enumerate(waypoints):
         print(f"\n>>> [{i+1}/{len(waypoints)}] {label}")
         t0 = time.time()
@@ -222,10 +226,14 @@ def fly_with_avoidance(waypoints):
                   f"vel: ({vel[0]:.2f},{vel[1]:.2f},{vel[2]:.2f}) obs:{len(pts)}")
             time.sleep(1.0 / CONTROL_HZ)
 
-        # Brief hold at waypoint
+        # Brief hold at waypoint using position control
+        use_pos_setpoints = True
         set_target(wx, wy, wz)
         print(f"  Holding for 2s...")
         time.sleep(2)
+        use_pos_setpoints = False  # resume velocity for next waypoint
+
+    use_pos_setpoints = True  # re-enable for landing
 
 
 def land_and_disarm():
