@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Publish Gazebo marker messages to visualize obstacle points in the 3D viewport.
+Visualize VFH3D histogram bins as colored markers in Gazebo.
 
-Uses gz-transport /marker_array service in a background thread.
-Red=close, green=far.
+Draws spheres around the drone at each bin direction:
+  Red = blocked, Green = free.
+Only shows horizontal-ish bins (skip extreme up/down elevations).
 """
 
 import math
@@ -26,17 +27,18 @@ except ImportError:
 
 
 class GzMarkerViz:
-    """Draw obstacle points as colored markers in the Gazebo 3D viewport."""
+    """Draw VFH3D histogram bins as markers in the Gazebo 3D viewport."""
 
-    def __init__(self, namespace="tof_viz", max_points=30):
+    VIZ_RADIUS = 1.2  # distance from drone to place bin markers
+
+    def __init__(self, namespace="vfh_bins"):
         self._ns = namespace
-        self._max_pts = max_points
         self._node = Node()
-        self._prev_count = 0
         self._busy = threading.Event()
-        self._busy.set()  # starts as "not busy"
+        self._busy.set()
         self._lock = threading.Lock()
         self._pending = None
+        self._prev_count = 0
         self._thread = threading.Thread(target=self._worker, daemon=True)
         self._thread.start()
 
@@ -56,69 +58,84 @@ class GzMarkerViz:
             else:
                 time.sleep(0.01)
 
-    def update(self, obstacle_pts_body: np.ndarray, drone_pos_ned: tuple,
-               yaw: float = 0.0):
-        """Queue obstacle points for drawing (non-blocking, skips if busy)."""
+    def update(self, bins: list, drone_pos_ned: tuple, yaw: float = 0.0):
+        """
+        Draw VFH3D bins around the drone.
+
+        Args:
+            bins: list of (azimuth, elevation, blocked) from vfh.get_blocked_bins()
+            drone_pos_ned: (px, py, pz) in NED.
+            yaw: drone heading (rad, NED convention).
+        """
         if not self._busy.is_set():
-            return  # skip frame if previous update still sending
+            return
 
         px, py, pz = drone_pos_ned
-        n_pts = len(obstacle_pts_body)
-
-        if n_pts > self._max_pts:
-            idx = np.random.choice(n_pts, self._max_pts, replace=False)
-            pts = obstacle_pts_body[idx]
-        else:
-            pts = obstacle_pts_body
-        n = len(pts)
-
-        c, s = math.cos(yaw), math.sin(yaw)
-        bx, by, bz = pts[:, 0], pts[:, 1], pts[:, 2]
-        frd_x, frd_y, frd_z = bx, -by, -bz
-        ned_x = px + c * frd_x - s * frd_y
-        ned_y = py + s * frd_x + c * frd_y
-        ned_z = pz + frd_z
-        # NED → Gazebo ENU
-        gz_x = ned_y
-        gz_y = ned_x
-        gz_z = -ned_z
-
-        dists = np.sqrt(bx**2 + by**2 + bz**2)
-        t = np.clip((dists - 0.3) / 2.7, 0.0, 1.0)
+        c_yaw, s_yaw = math.cos(yaw), math.sin(yaw)
+        r = self.VIZ_RADIUS
 
         batch = Marker_V()
-        for i in range(n):
+        idx = 0
+
+        for az, el, blocked in bins:
+            # Skip extreme elevations (only show ±40° from horizontal)
+            if abs(el) > math.radians(40):
+                continue
+
+            # Bin direction in body FLU
+            bx = math.cos(el) * math.cos(az)
+            by = math.cos(el) * math.sin(az)
+            bz = math.sin(el)
+
+            # Body FLU → FRD → rotate by yaw → NED
+            frd_x, frd_y, frd_z = bx, -by, -bz
+            ned_dx = c_yaw * frd_x - s_yaw * frd_y
+            ned_dy = s_yaw * frd_x + c_yaw * frd_y
+            ned_dz = frd_z
+
+            ned_x = px + r * ned_dx
+            ned_y = py + r * ned_dy
+            ned_z = pz + r * ned_dz
+
+            # NED → Gazebo ENU
+            gz_x = ned_y
+            gz_y = ned_x
+            gz_z = -ned_z
+
             m = batch.marker.add()
             m.ns = self._ns
-            m.id = i
+            m.id = idx
             m.action = Marker.ADD_MODIFY
             m.type = Marker.SPHERE
-            m.pose.position.x = float(gz_x[i])
-            m.pose.position.y = float(gz_y[i])
-            m.pose.position.z = float(gz_z[i])
-            m.scale.x = 0.1
-            m.scale.y = 0.1
-            m.scale.z = 0.1
-            m.material.ambient.r = float(1.0 - t[i])
-            m.material.ambient.g = float(t[i])
+            m.pose.position.x = gz_x
+            m.pose.position.y = gz_y
+            m.pose.position.z = gz_z
+            size = 0.12 if blocked else 0.06
+            m.scale.x = size
+            m.scale.y = size
+            m.scale.z = size
+            if blocked:
+                m.material.ambient.r = 1.0
+                m.material.ambient.g = 0.0
+            else:
+                m.material.ambient.r = 0.0
+                m.material.ambient.g = 1.0
             m.material.ambient.b = 0.0
-            m.material.ambient.a = 0.9
-            m.material.diffuse.r = float(1.0 - t[i])
-            m.material.diffuse.g = float(t[i])
-            m.material.diffuse.b = 0.0
-            m.material.diffuse.a = 0.9
+            m.material.ambient.a = 0.8
+            m.material.diffuse.CopyFrom(m.material.ambient)
             m.lifetime.sec = 0
-            m.lifetime.nsec = 200_000_000
+            m.lifetime.nsec = 300_000_000
+            idx += 1
 
-        prev = self._prev_count
-        for i in range(n, prev):
+        # Delete stale
+        for i in range(idx, self._prev_count):
             m = batch.marker.add()
             m.ns = self._ns
             m.id = i
             m.action = Marker.DELETE_MARKER
 
         with self._lock:
-            self._pending = (batch, n)
+            self._pending = (batch, idx)
 
     def clear(self):
         batch = Marker_V()

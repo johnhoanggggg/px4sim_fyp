@@ -244,13 +244,11 @@ def fly_with_avoidance(waypoints):
             if len(pts) > 0:
                 pts = pts[pts[:, 2] > -1.0]
 
-            # Visualize obstacle points in Gazebo
-            if len(pts) > 0:
-                viz.update(pts, (px, py, pz), yaw)
-
             # Compute velocity in body frame
             if len(pts) > 0:
                 vel_body = vfh.update(pts, goal_body)
+                # Visualize VFH3D bins after update (so histogram is current)
+                viz.update(vfh.get_blocked_bins(), (px, py, pz), yaw)
             else:
                 goal_dist = math.sqrt(goal_ned[0]**2 + goal_ned[1]**2 + goal_ned[2]**2)
                 if goal_dist > 0.01:

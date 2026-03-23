@@ -177,6 +177,16 @@ class VFH3D:
             return self.max_speed * max(min_dist / self.safe_distance, 0.3)
         return self.max_speed
 
+    def get_blocked_bins(self):
+        """Return list of (azimuth, elevation, blocked) for each bin center."""
+        bins = []
+        for ei in range(self.n_el):
+            for ai in range(self.n_az):
+                az = -math.pi + (ai + 0.5) * self.res
+                el = -math.pi / 2 + (ei + 0.5) * self.res
+                bins.append((az, el, bool(self._blocked[ei, ai])))
+        return bins
+
     def reset(self):
         """Clear the hysteresis state."""
         self._blocked[:] = False
