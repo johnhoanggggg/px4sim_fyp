@@ -242,8 +242,53 @@
       </plugin>
       <plugin filename="GzSceneManager" name="Scene Manager"/>
       <plugin filename="InteractiveViewControl" name="Interactive view"/>
-      <plugin filename="VisualizeLidar" name="Visualize Lidar">
-        <gz-gui><title>Lidar Rays</title></gz-gui>
+      <plugin filename="VisualizeLidar" name="VisualizeLidar0">
+        <gz-gui><property key="visible" type="bool">false</property></gz-gui>
+        <topic>/tof/0</topic>
+      </plugin>
+      <plugin filename="VisualizeLidar" name="VisualizeLidar1">
+        <gz-gui><property key="visible" type="bool">false</property></gz-gui>
+        <topic>/tof/1</topic>
+      </plugin>
+      <plugin filename="VisualizeLidar" name="VisualizeLidar2">
+        <gz-gui><property key="visible" type="bool">false</property></gz-gui>
+        <topic>/tof/2</topic>
+      </plugin>
+      <plugin filename="VisualizeLidar" name="VisualizeLidar3">
+        <gz-gui><property key="visible" type="bool">false</property></gz-gui>
+        <topic>/tof/3</topic>
+      </plugin>
+      <plugin filename="VisualizeLidar" name="VisualizeLidar4">
+        <gz-gui><property key="visible" type="bool">false</property></gz-gui>
+        <topic>/tof/4</topic>
+      </plugin>
+      <plugin filename="VisualizeLidar" name="VisualizeLidar5">
+        <gz-gui><property key="visible" type="bool">false</property></gz-gui>
+        <topic>/tof/5</topic>
+      </plugin>
+      <plugin filename="VisualizeLidar" name="VisualizeLidar6">
+        <gz-gui><property key="visible" type="bool">false</property></gz-gui>
+        <topic>/tof/6</topic>
+      </plugin>
+      <plugin filename="VisualizeLidar" name="VisualizeLidar7">
+        <gz-gui><property key="visible" type="bool">false</property></gz-gui>
+        <topic>/tof/7</topic>
+      </plugin>
+      <plugin filename="VisualizeLidar" name="VisualizeLidar8">
+        <gz-gui><property key="visible" type="bool">false</property></gz-gui>
+        <topic>/tof/8</topic>
+      </plugin>
+      <plugin filename="VisualizeLidar" name="VisualizeLidar9">
+        <gz-gui><property key="visible" type="bool">false</property></gz-gui>
+        <topic>/tof/9</topic>
+      </plugin>
+      <plugin filename="VisualizeLidar" name="VisualizeLidarUp">
+        <gz-gui><property key="visible" type="bool">false</property></gz-gui>
+        <topic>/tof/up</topic>
+      </plugin>
+      <plugin filename="VisualizeLidar" name="VisualizeLidarDown">
+        <gz-gui><property key="visible" type="bool">false</property></gz-gui>
+        <topic>/tof/down</topic>
       </plugin>
     </gui>
 
