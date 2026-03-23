@@ -30,8 +30,6 @@ MAX_SPEED = 1.0          # m/s max avoidance velocity
 SAFE_DISTANCE = 0.5      # m — obstacle proximity for slowdown
 CONTROL_HZ = 10          # avoidance loop rate
 WAYPOINT_TOL = 0.4       # m — switch to next waypoint within this distance
-TAKEOFF_ALT = -1.5       # NED z for truss centre (z=2.0m up = -2.0 NED, but
-                          # corridor midpoint is ~2.0m so -1.5 to -2.0)
 
 # Waypoints: (x, y, z_ned, label)
 WAYPOINTS = [
@@ -61,15 +59,8 @@ TARGET_COMP = recv.target_component
 # Shared state
 # ---------------------------------------------------------------------------
 running = True
-avoidance_enabled = False        # disabled until airborne
-pos_target = [0.0, 0.0, -1.0, 0.0]  # x, y, z, yaw — position setpoint for pre-avoidance
-current_pos = [0.0, 0.0, 0.0]   # NED position
-current_vel_cmd = [0.0, 0.0, 0.0]  # velocity command from avoidance
-pos_lock = threading.Lock()
-vel_lock = threading.Lock()
+target = [0.0, 0.0, -1.0, 0.0]  # x, y, z, yaw — shared setpoint
 target_lock = threading.Lock()
-waypoint_idx = 0
-wp_lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
 # Sensor + avoidance modules
@@ -87,24 +78,8 @@ vfh = VFH3D(
 # MAVLink helpers
 # ---------------------------------------------------------------------------
 
-def send_velocity(vx, vy, vz, yaw=0.0):
-    """Send velocity setpoint in NED frame."""
-    # type_mask bits: 0-2=pos, 3-5=vel, 6-8=accel, 9=force, 10=yaw, 11=yaw_rate
-    # ignore position (0-2), USE velocity (3-5), ignore accel (6-8),
-    # no force (9), USE yaw (10), ignore yaw_rate (11)
-    type_mask = 0b0000_1001_1100_0111  # 0x09C7
-    send.mav.set_position_target_local_ned_send(
-        0, TARGET_SYS, TARGET_COMP,
-        mavutil.mavlink.MAV_FRAME_LOCAL_NED,
-        type_mask,
-        0, 0, 0,       # position (ignored)
-        vx, vy, vz,    # velocity
-        0, 0, 0,        # acceleration (ignored)
-        yaw, 0)
-
-
-def send_position(x, y, z, yaw=0.0):
-    """Send position setpoint in NED frame (used for takeoff)."""
+def set_pos(x, y, z, yaw=0):
+    """Send position setpoint in NED frame."""
     send.mav.set_position_target_local_ned_send(
         0, TARGET_SYS, TARGET_COMP,
         mavutil.mavlink.MAV_FRAME_LOCAL_NED,
@@ -112,28 +87,41 @@ def send_position(x, y, z, yaw=0.0):
         x, y, z, 0, 0, 0, 0, 0, 0, yaw, 0)
 
 
+def set_vel(vx, vy, vz, yaw=0.0):
+    """Send velocity setpoint in NED frame."""
+    # ignore position (0-2), USE velocity (3-5), ignore accel (6-8),
+    # no force (9), USE yaw (10), ignore yaw_rate (11)
+    type_mask = 0b0000_1001_1100_0111
+    send.mav.set_position_target_local_ned_send(
+        0, TARGET_SYS, TARGET_COMP,
+        mavutil.mavlink.MAV_FRAME_LOCAL_NED,
+        type_mask,
+        0, 0, 0,
+        vx, vy, vz,
+        0, 0, 0,
+        yaw, 0)
+
+
 def get_position():
-    """Read latest position from PX4."""
-    msg = recv.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=0.5)
+    """Read latest position from PX4 (call from main thread only)."""
+    msg = recv.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=1)
     if msg:
         return msg.x, msg.y, msg.z
     return None
 
 # ---------------------------------------------------------------------------
-# Background threads
+# Background threads — only use 'send', never 'recv'
 # ---------------------------------------------------------------------------
 
 def setpoint_loop():
-    """Stream position setpoints at 20Hz when avoidance is disabled.
-    Keeps PX4 in offboard mode during takeoff/landing."""
+    """Stream position setpoints at 20Hz. Keeps PX4 in offboard mode."""
     while running:
-        if not avoidance_enabled:
-            with target_lock:
-                x, y, z, yaw = pos_target
-            try:
-                send_position(x, y, z, yaw)
-            except Exception:
-                pass
+        with target_lock:
+            x, y, z, yaw = target
+        try:
+            set_pos(x, y, z, yaw)
+        except Exception:
+            pass
         time.sleep(0.05)
 
 
@@ -149,112 +137,88 @@ def heartbeat_loop():
             pass
         time.sleep(0.5)
 
+# ---------------------------------------------------------------------------
+# Flight control helpers
+# ---------------------------------------------------------------------------
 
-def position_loop():
-    """Read position from PX4 as fast as possible."""
-    miss_count = 0
-    while running:
+def set_target(x, y, z, yaw=0):
+    with target_lock:
+        target[0] = x
+        target[1] = y
+        target[2] = z
+        target[3] = yaw
+
+
+def wait_until_reached(x, y, z, tolerance=WAYPOINT_TOL, timeout=15):
+    """Block until position is within tolerance. Reads recv on main thread."""
+    t0 = time.time()
+    while time.time() - t0 < timeout:
         pos = get_position()
         if pos:
-            miss_count = 0
-            with pos_lock:
-                current_pos[0] = pos[0]
-                current_pos[1] = pos[1]
-                current_pos[2] = pos[2]
-        else:
-            miss_count += 1
-            if miss_count % 20 == 0:
-                print(f"[WARN] No LOCAL_POSITION_NED received ({miss_count} misses)")
-        time.sleep(0.02)
-
-
-def avoidance_loop():
-    """
-    Main avoidance control loop at CONTROL_HZ.
-
-    Reads sensor data, computes VFH3D velocity, sends commands.
-    Only active when avoidance_enabled is True; otherwise sends
-    position setpoints so takeoff works normally.
-    """
-    dt = 1.0 / CONTROL_HZ
-    while running:
-        if not avoidance_enabled:
-            # Not yet airborne — let main thread handle position control
-            time.sleep(dt)
-            continue
-
-        # Current position
-        with pos_lock:
-            px, py, pz = current_pos[0], current_pos[1], current_pos[2]
-
-        # Current waypoint
-        with wp_lock:
-            idx = waypoint_idx
-        if idx >= len(WAYPOINTS):
-            # Mission complete — hover
-            send_velocity(0, 0, 0)
-            time.sleep(dt)
-            continue
-
-        wx, wy, wz, _ = WAYPOINTS[idx]
-
-        # Goal direction in NED (vector from current position to waypoint)
-        goal = (wx - px, wy - py, wz - pz)
-        goal_dist = math.sqrt(goal[0]**2 + goal[1]**2 + goal[2]**2)
-
-        if goal_dist < 0.01:
-            goal = (0.0, 0.0, 0.0)
-
-        # Get obstacle points from ToF sensors
-        pts = tof.get_obstacle_points(max_range=4.0)
-
-        # Run VFH3D
-        if len(pts) > 0:
-            vel = vfh.update(pts, goal)
-        else:
-            # No sensor data — fly direct toward goal (capped at max speed)
-            if goal_dist > 0.01:
-                scale = min(MAX_SPEED, goal_dist) / goal_dist
-                vel = (goal[0] * scale, goal[1] * scale, goal[2] * scale)
-            else:
-                vel = (0.0, 0.0, 0.0)
-
-        # Send velocity command
-        try:
-            send_velocity(vel[0], vel[1], vel[2])
-        except Exception:
-            pass
-
-        # Store for display
-        with vel_lock:
-            current_vel_cmd[0] = vel[0]
-            current_vel_cmd[1] = vel[1]
-            current_vel_cmd[2] = vel[2]
-
-        time.sleep(dt)
-
-# ---------------------------------------------------------------------------
-# Flight control
-# ---------------------------------------------------------------------------
-
-def wait_until_reached(x, y, z, tolerance=WAYPOINT_TOL, timeout=30):
-    """Block until position is within tolerance of target."""
-    t0 = time.time()
-    while running and time.time() - t0 < timeout:
-        with pos_lock:
-            px, py, pz = current_pos[0], current_pos[1], current_pos[2]
-        dist = math.sqrt((px - x)**2 + (py - y)**2 + (pz - z)**2)
-        with vel_lock:
-            vx, vy, vz = current_vel_cmd[0], current_vel_cmd[1], current_vel_cmd[2]
-        pts = tof.get_obstacle_points()
-        print(f"  pos: ({px:.2f}, {py:.2f}, {-pz:.2f}m up)  "
-              f"dist: {dist:.2f}  vel: ({vx:.2f},{vy:.2f},{vz:.2f})  "
-              f"obs_pts: {len(pts)}")
-        if dist < tolerance:
-            return True
-        time.sleep(0.5)
+            dist = ((pos[0]-x)**2 + (pos[1]-y)**2 + (pos[2]-z)**2)**0.5
+            print(f"  pos: ({pos[0]:.2f}, {pos[1]:.2f}, {-pos[2]:.2f}m up) dist: {dist:.2f}")
+            if dist < tolerance:
+                return True
+        time.sleep(0.1)
     print("  Timeout reaching position")
     return False
+
+
+def fly_with_avoidance(waypoints):
+    """
+    Navigate waypoints using VFH3D obstacle avoidance.
+
+    Runs on the main thread. Reads position from recv, reads ToF from
+    tof_reader, computes VFH3D velocity, and overrides the setpoint.
+    """
+    for i, (wx, wy, wz, label) in enumerate(waypoints):
+        print(f"\n>>> [{i+1}/{len(waypoints)}] {label}")
+        t0 = time.time()
+
+        while time.time() - t0 < 30:
+            # Read position (main thread owns recv)
+            pos = get_position()
+            if not pos:
+                continue
+            px, py, pz = pos
+
+            # Check if waypoint reached
+            dist = math.sqrt((px - wx)**2 + (py - wy)**2 + (pz - wz)**2)
+            if dist < WAYPOINT_TOL:
+                print(f"  Reached! dist={dist:.2f}")
+                break
+
+            # Goal direction
+            goal = (wx - px, wy - py, wz - pz)
+
+            # Get obstacle points
+            pts = tof.get_obstacle_points(max_range=4.0)
+
+            # Compute velocity
+            if len(pts) > 0:
+                vel = vfh.update(pts, goal)
+            else:
+                goal_dist = math.sqrt(goal[0]**2 + goal[1]**2 + goal[2]**2)
+                if goal_dist > 0.01:
+                    scale = min(MAX_SPEED, goal_dist) / goal_dist
+                    vel = (goal[0] * scale, goal[1] * scale, goal[2] * scale)
+                else:
+                    vel = (0.0, 0.0, 0.0)
+
+            # Send velocity command directly
+            try:
+                set_vel(vel[0], vel[1], vel[2])
+            except Exception:
+                pass
+
+            print(f"  pos: ({px:.2f},{py:.2f},{-pz:.2f}m up) dist:{dist:.2f} "
+                  f"vel: ({vel[0]:.2f},{vel[1]:.2f},{vel[2]:.2f}) obs:{len(pts)}")
+            time.sleep(1.0 / CONTROL_HZ)
+
+        # Brief hold at waypoint
+        set_target(wx, wy, wz)
+        print(f"  Holding for 2s...")
+        time.sleep(2)
 
 
 def land_and_disarm():
@@ -297,15 +261,15 @@ def shutdown():
 
 
 # ---------------------------------------------------------------------------
-# Main
+# Main — all recv access stays on this thread
 # ---------------------------------------------------------------------------
 try:
-    # Start background threads
-    for fn in (setpoint_loop, heartbeat_loop, position_loop, avoidance_loop):
+    # Start background threads (only use 'send', never 'recv')
+    for fn in (setpoint_loop, heartbeat_loop):
         t = threading.Thread(target=fn, daemon=True)
         t.start()
 
-    # Wait for sensor data (optional — proceed even without it)
+    # Wait for sensor data
     print("Waiting for ToF sensor data (up to 5s)...")
     t0 = time.time()
     while not tof.has_data() and time.time() - t0 < 5:
@@ -313,10 +277,9 @@ try:
     if tof.has_data():
         print("ToF data received!")
     else:
-        print("No ToF data yet — proceeding anyway (will use direct waypoint nav)")
+        print("No ToF data yet — proceeding anyway")
 
-    # Stream position setpoints for PX4 offboard mode requirement
-    # (setpoint_loop thread is already streaming pos_target at 20Hz)
+    # Stream setpoints (background thread already running)
     print("Streaming setpoints for 4s...")
     time.sleep(4)
 
@@ -336,50 +299,21 @@ try:
         0, 1, 21196, 0, 0, 0, 0, 0)
     time.sleep(2)
 
-    # --- Takeoff using position control (no avoidance yet) ---
-    print("\n>>> Takeoff to truss altitude using position control...")
-    takeoff_z = WAYPOINTS[0][2]  # -1.5 NED
-    with target_lock:
-        pos_target[2] = takeoff_z
-    t0 = time.time()
-    while time.time() - t0 < 15:
-        with pos_lock:
-            pz = current_pos[2]
-        alt = -pz
-        print(f"  Climbing... alt={alt:.2f}m  target={-takeoff_z:.2f}m")
-        if abs(pz - takeoff_z) < 0.3:
-            print("  Takeoff altitude reached!")
-            break
-        time.sleep(0.5)
+    # --- Takeoff using position control ---
+    print("\n>>> Takeoff to truss altitude...")
+    set_target(0, 0, -1.5)
+    wait_until_reached(0, 0, -1.5, tolerance=0.3, timeout=15)
 
-    # --- Enable VFH3D avoidance now that we're airborne ---
-    print("Enabling VFH3D obstacle avoidance...")
-    avoidance_enabled = True
-    vfh.reset()  # clear any stale histogram from ground readings
-    time.sleep(0.5)
+    # --- Fly waypoints with VFH3D avoidance ---
+    print("\nEnabling VFH3D obstacle avoidance...")
+    vfh.reset()
+    fly_with_avoidance(WAYPOINTS[1:])  # skip takeoff waypoint
 
-    # Fly waypoints with avoidance (skip first waypoint if it's just takeoff alt)
-    for i, (x, y, z, label) in enumerate(WAYPOINTS):
-        if i == 0:
-            continue  # already at takeoff altitude
-        with wp_lock:
-            waypoint_idx = i
-        print(f"\n>>> [{i+1}/{len(WAYPOINTS)}] {label}")
-        wait_until_reached(x, y, z, timeout=20)
-        print(f"  Holding for 2s...")
-        time.sleep(2)
-
-    # Mark mission complete, disable avoidance for landing
-    avoidance_enabled = False
-    with wp_lock:
-        waypoint_idx = len(WAYPOINTS)
-
-    # Land
+    # --- Land ---
     land_and_disarm()
 
 except KeyboardInterrupt:
     print("\nInterrupted! Landing...")
-    avoidance_enabled = False
     land_and_disarm()
 finally:
     shutdown()
