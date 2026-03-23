@@ -193,7 +193,10 @@ class VFH2DStar:
 
         # Otherwise, expand top candidates deeper
         n_expand = min(self._max_children, len(free_indices))
-        top_indices = np.argpartition(level_cost, n_expand)[:n_expand]
+        if n_expand >= len(free_indices):
+            top_indices = np.arange(len(free_indices))
+        else:
+            top_indices = np.argpartition(level_cost, n_expand)[:n_expand]
 
         best_total = float('inf')
         best_az_first = None
