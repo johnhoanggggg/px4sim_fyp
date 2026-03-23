@@ -112,20 +112,38 @@ def set_vel(vx, vy, vz, yaw=0.0):
         yaw, 0)
 
 
+_latest_yaw = 0.0
+
+
 def get_position():
-    """Read latest position and heading from PX4 (call from main thread only)."""
-    msg = recv.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=1)
-    if msg:
-        return msg.x, msg.y, msg.z
-    return None
+    """Read position only (convenience wrapper)."""
+    pos, _ = get_pos_and_yaw()
+    return pos
 
 
-def get_yaw():
-    """Read latest yaw (heading) from PX4."""
-    msg = recv.recv_match(type='ATTITUDE', blocking=False)
-    if msg:
-        return msg.yaw
-    return 0.0
+def get_pos_and_yaw():
+    """Read latest position and yaw from PX4 (main thread only).
+
+    Drains all pending messages so ATTITUDE updates aren't lost while
+    blocking for LOCAL_POSITION_NED.
+    """
+    global _latest_yaw
+    pos = None
+    # Drain all available messages, caching the latest of each type
+    while True:
+        msg = recv.recv_match(
+            type=['LOCAL_POSITION_NED', 'ATTITUDE'],
+            blocking=(pos is None),  # block only if we haven't got position yet
+            timeout=1,
+        )
+        if msg is None:
+            break
+        mtype = msg.get_type()
+        if mtype == 'LOCAL_POSITION_NED':
+            pos = (msg.x, msg.y, msg.z)
+        elif mtype == 'ATTITUDE':
+            _latest_yaw = msg.yaw
+    return pos, _latest_yaw
 
 # ---------------------------------------------------------------------------
 # Background threads — only use 'send', never 'recv'
@@ -197,8 +215,8 @@ def fly_with_avoidance(waypoints):
         t0 = time.time()
 
         while time.time() - t0 < 30:
-            # Read position (main thread owns recv)
-            pos = get_position()
+            # Read position + yaw (drains all pending messages)
+            pos, yaw = get_pos_and_yaw()
             if not pos:
                 continue
             px, py, pz = pos
@@ -208,9 +226,6 @@ def fly_with_avoidance(waypoints):
             if dist < WAYPOINT_TOL:
                 print(f"  Reached! dist={dist:.2f}")
                 break
-
-            # Read yaw for frame conversions
-            yaw = get_yaw()
             c_yaw, s_yaw = math.cos(yaw), math.sin(yaw)
 
             # Goal direction in NED → rotate to body FRD → convert to FLU
