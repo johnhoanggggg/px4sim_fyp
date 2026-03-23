@@ -2,8 +2,13 @@
 """
 Publish Gazebo marker messages to visualize obstacle points in the 3D viewport.
 
-Uses gz-transport to draw colored spheres at each obstacle point detected
-by the ToF sensors. Points are colored by distance (green=far, red=close).
+Uses gz-transport /marker_array service to batch-draw colored spheres at
+obstacle points detected by the ToF sensors. Red=close, green=far.
+
+Coordinate frames:
+  - Gazebo world: ENU (x=east, y=north, z=up)
+  - PX4 NED:      x=north, y=east, z=down
+  - Body FLU:     x=forward, y=left, z=up (at yaw=0: fwd=north)
 """
 
 import numpy as np
@@ -16,86 +21,93 @@ except ImportError:
 try:
     from gz.msgs.marker_pb2 import Marker
     from gz.msgs.marker_v_pb2 import Marker_V
+    from gz.msgs.boolean_pb2 import Boolean
 except ImportError:
     from gz.msgs10.marker_pb2 import Marker
     from gz.msgs10.marker_v_pb2 import Marker_V
+    from gz.msgs10.boolean_pb2 import Boolean
 
 
 class GzMarkerViz:
     """Draw obstacle points as colored markers in the Gazebo 3D viewport."""
 
-    MARKER_TOPIC = "/marker"
-
-    def __init__(self, namespace="tof_viz", max_points=200):
+    def __init__(self, namespace="tof_viz", max_points=80):
         self._ns = namespace
         self._max_pts = max_points
         self._node = Node()
-        self._pub = self._node.advertise(self.MARKER_TOPIC, Marker_V)
         self._prev_count = 0
 
     def update(self, obstacle_pts_body: np.ndarray, drone_pos_ned: tuple):
         """
-        Draw obstacle points in world frame.
+        Draw obstacle points in Gazebo world frame (single batch call).
 
         Args:
-            obstacle_pts_body: (N,3) obstacle points in body FLU frame.
-            drone_pos_ned: (px, py, pz) drone position in NED frame.
+            obstacle_pts_body: (N,3) points in body FLU frame.
+            drone_pos_ned: (px, py, pz) drone position in NED.
         """
         px, py, pz = drone_pos_ned
-        msg = Marker_V()
+        n_pts = len(obstacle_pts_body)
 
-        n = min(len(obstacle_pts_body), self._max_pts)
+        # Subsample if too many points
+        if n_pts > self._max_pts:
+            idx = np.linspace(0, n_pts - 1, self._max_pts, dtype=int)
+            pts = obstacle_pts_body[idx]
+        else:
+            pts = obstacle_pts_body
+        n = len(pts)
+
+        # Body FLU -> NED (yaw≈0): ned = drone + (bx, -by, -bz)
+        # NED -> Gazebo ENU: enu_x=ned_y, enu_y=ned_x, enu_z=-ned_z
+        bx, by, bz = pts[:, 0], pts[:, 1], pts[:, 2]
+        gz_x = py + (-by)       # ENU east  = NED y + body(-by)
+        gz_y = px + bx           # ENU north = NED x + body(bx)
+        gz_z = -(pz + (-bz))    # ENU up    = -(NED z + body(-bz))
+
+        dists = np.sqrt(bx**2 + by**2 + bz**2)
+        t = np.clip((dists - 0.3) / 2.7, 0.0, 1.0)
+
+        # Build batch message
+        batch = Marker_V()
 
         for i in range(n):
-            bx, by, bz = obstacle_pts_body[i]
-            # Body FLU to NED: ned_x=body_x, ned_y=-body_y, ned_z=-body_z
-            wx = px + bx
-            wy = py + (-by)
-            wz = pz + (-bz)
-
-            dist = float(np.sqrt(bx**2 + by**2 + bz**2))
-            # Color by distance: red=close (0.3m), green=far (3m)
-            t = min(max((dist - 0.3) / 2.7, 0.0), 1.0)
-            r, g, b = 1.0 - t, t, 0.0
-
-            m = msg.marker.add()
+            m = batch.marker.add()
             m.ns = self._ns
             m.id = i
             m.action = Marker.ADD_MODIFY
             m.type = Marker.SPHERE
-            m.pose.position.x = wx
-            m.pose.position.y = wy
-            # Gazebo uses ENU-like Z-up for rendering, NED Z is down
-            m.pose.position.z = -wz
-            m.scale.x = 0.08
-            m.scale.y = 0.08
-            m.scale.z = 0.08
-            mat = m.material
-            mat.ambient.r = r
-            mat.ambient.g = g
-            mat.ambient.b = b
-            mat.ambient.a = 0.8
-            mat.diffuse.r = r
-            mat.diffuse.g = g
-            mat.diffuse.b = b
-            mat.diffuse.a = 0.8
-            m.lifetime.sec = 0
-            m.lifetime.nsec = 500_000_000  # 0.5s auto-expire
+            m.pose.position.x = float(gz_x[i])
+            m.pose.position.y = float(gz_y[i])
+            m.pose.position.z = float(gz_z[i])
+            m.scale.x = 0.1
+            m.scale.y = 0.1
+            m.scale.z = 0.1
+            m.material.ambient.r = float(1.0 - t[i])
+            m.material.ambient.g = float(t[i])
+            m.material.ambient.b = 0.0
+            m.material.ambient.a = 0.9
+            m.material.diffuse.r = float(1.0 - t[i])
+            m.material.diffuse.g = float(t[i])
+            m.material.diffuse.b = 0.0
+            m.material.diffuse.a = 0.9
+            m.lifetime.sec = 1
+            m.lifetime.nsec = 0
 
-        # Delete leftover markers from previous frame
+        # Delete stale markers from previous frame
         for i in range(n, self._prev_count):
-            m = msg.marker.add()
+            m = batch.marker.add()
             m.ns = self._ns
             m.id = i
             m.action = Marker.DELETE_MARKER
 
         self._prev_count = n
-        self._pub.publish(msg)
+
+        # Single batch service call
+        self._node.request("/marker_array", batch, Marker_V, Boolean, 200)
 
     def clear(self):
         """Remove all markers."""
-        msg = Marker_V()
-        m = msg.marker.add()
+        batch = Marker_V()
+        m = batch.marker.add()
         m.ns = self._ns
         m.action = Marker.DELETE_ALL
-        self._pub.publish(msg)
+        self._node.request("/marker_array", batch, Marker_V, Boolean, 200)
