@@ -28,8 +28,8 @@ from viz2d import run_viz
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MAX_SPEED = 0.5
-SAFE_DISTANCE = 1.0
+MAX_SPEED = 0.4
+SAFE_DISTANCE = 1.2
 CONTROL_HZ = 10
 WAYPOINT_TOL = 0.5
 
@@ -77,10 +77,12 @@ target_lock = threading.Lock()
 tof = TofReader()
 vfh = VFH2D(
     resolution_deg=10,
-    threshold_low=0.2,
-    threshold_high=0.4,
+    threshold_low=0.15,
+    threshold_high=0.3,
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
+    drone_radius=0.35,
+    enlarge_bins=2,
 )
 
 # Visualizer (separate process)

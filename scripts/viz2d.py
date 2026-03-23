@@ -14,11 +14,12 @@ from a multiprocessing.Queue and draws:
 
 import math
 import multiprocessing as mp
+from queue import Empty
 
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+from matplotlib.collections import LineCollection
 from matplotlib.animation import FuncAnimation
 import numpy as np
 
@@ -43,10 +44,19 @@ PILLAR_NED = [
     (3.0,  3.0),
 ]
 
-BIN_LINE_LEN = 0.6   # length of histogram bin indicator lines
+BIN_LINE_LEN = 1.0     # length of bin indicator lines
+ARROW_LEN = 1.4        # chosen direction arrow length
 PILLAR_RADIUS = 0.15
-DRONE_SIZE = 0.3
-TRAIL_MAX = 500
+DRONE_SIZE = 0.4
+TRAIL_MAX = 2000
+
+
+def _body_to_ned(az_body, yaw):
+    """Convert body-FLU azimuth to NED (north, east) unit direction."""
+    c_yaw, s_yaw = math.cos(yaw), math.sin(yaw)
+    dn = math.cos(az_body) * c_yaw - math.sin(az_body) * s_yaw
+    de = math.cos(az_body) * s_yaw + math.sin(az_body) * c_yaw
+    return dn, de
 
 
 def run_viz(queue: mp.Queue):
@@ -56,7 +66,8 @@ def run_viz(queue: mp.Queue):
 
     # Static elements — pillars
     for (pn, pe) in PILLAR_NED:
-        circ = plt.Circle((pe, pn), PILLAR_RADIUS, color="0.55", zorder=2)
+        circ = plt.Circle((pe, pn), PILLAR_RADIUS, color="0.45",
+                          ec="0.3", lw=1, zorder=2)
         ax.add_patch(circ)
 
     ax.set_aspect("equal")
@@ -69,15 +80,20 @@ def run_viz(queue: mp.Queue):
 
     # Dynamic artists
     trail_x, trail_y = [], []
-    trail_line, = ax.plot([], [], "b-", lw=0.8, alpha=0.4, zorder=1)
-    drone_marker, = ax.plot([], [], "bs", ms=6, zorder=5)
-    heading_line, = ax.plot([], [], "b-", lw=2, zorder=5)
-    wp_scatter = ax.scatter([], [], marker="D", c="dodgerblue", s=50, zorder=3)
-    cur_wp_scatter = ax.scatter([], [], marker="*", c="red", s=150, zorder=4)
-    chosen_arrow = ax.annotate("", xy=(0, 0), xytext=(0, 0),
-                               arrowprops=dict(arrowstyle="->", color="blue", lw=2),
-                               zorder=6)
-    bin_lines = []  # will be populated on first frame
+    trail_line, = ax.plot([], [], "-", color="cornflowerblue", lw=1, alpha=0.5, zorder=1)
+    drone_marker, = ax.plot([], [], "o", color="dodgerblue", ms=8,
+                            mec="navy", mew=1.5, zorder=6)
+    heading_line, = ax.plot([], [], "-", color="navy", lw=2.5, zorder=6)
+    wp_scatter = ax.scatter([], [], marker="D", c="dodgerblue", s=60,
+                            edgecolors="navy", linewidths=0.5, zorder=3)
+    cur_wp_scatter = ax.scatter([], [], marker="*", c="red", s=200, zorder=4)
+    chosen_line, = ax.plot([], [], "-", color="blue", lw=3, solid_capstyle="round", zorder=5)
+
+    # Bin line collections (reused each frame)
+    free_lc = LineCollection([], colors="limegreen", linewidths=1.5, alpha=0.6, zorder=3)
+    blocked_lc = LineCollection([], colors="red", linewidths=3.0, alpha=0.8, zorder=4)
+    ax.add_collection(free_lc)
+    ax.add_collection(blocked_lc)
 
     state = {"first": True}
 
@@ -87,7 +103,7 @@ def run_viz(queue: mp.Queue):
         try:
             while True:
                 data = queue.get_nowait()
-        except Exception:
+        except Empty:
             pass
 
         if data is None:
@@ -112,9 +128,10 @@ def run_viz(queue: mp.Queue):
         drone_marker.set_data([de], [dn])
 
         # Heading indicator
-        hx = de + DRONE_SIZE * math.sin(yaw)  # yaw in NED: 0=north, CW
-        hy = dn + DRONE_SIZE * math.cos(yaw)
-        heading_line.set_data([de, hx], [dn, hy])
+        h_dn, h_de = _body_to_ned(0.0, yaw)  # forward direction
+        heading_line.set_data(
+            [de, de + DRONE_SIZE * h_de],
+            [dn, dn + DRONE_SIZE * h_dn])
 
         # Waypoints
         if wps:
@@ -124,44 +141,28 @@ def run_viz(queue: mp.Queue):
             if 0 <= cur_wp < len(wps):
                 cur_wp_scatter.set_offsets([[wps[cur_wp][1], wps[cur_wp][0]]])
 
-        # Clear old bin lines
-        for ln in bin_lines:
-            ln.remove()
-        bin_lines.clear()
-
-        # Draw bin indicators
+        # Bin lines — separate into free and blocked segments
+        free_segs, blocked_segs = [], []
         for az_body, blocked in bins:
-            # Body FLU azimuth → world azimuth
-            # In body FLU: az=0 forward, +ve=left
-            # Yaw in NED: 0=north, +ve CW
-            # World north component = cos(yaw) * cos(az_body) - sin(yaw) * sin(az_body)
-            #   (because body forward rotated by yaw, and body left is -sin_az in FRD)
-            # Actually: body FLU fwd = (cos_yaw, sin_yaw) in NED (N, E)
-            #           body FLU left = (-sin_yaw, cos_yaw) in NED
-            # direction_ned = cos(az) * fwd + sin(az) * left
-            c_yaw, s_yaw = math.cos(yaw), math.sin(yaw)
-            dx_n = math.cos(az_body) * c_yaw + math.sin(az_body) * (-s_yaw)
-            dx_e = math.cos(az_body) * s_yaw + math.sin(az_body) * c_yaw
-            color = "red" if blocked else "limegreen"
-            lw = 2.5 if blocked else 1.0
-            ln, = ax.plot(
-                [de, de + BIN_LINE_LEN * dx_e],
-                [dn, dn + BIN_LINE_LEN * dx_n],
-                color=color, lw=lw, alpha=0.7, zorder=4,
-            )
-            bin_lines.append(ln)
+            b_dn, b_de = _body_to_ned(az_body, yaw)
+            seg = [(de, dn), (de + BIN_LINE_LEN * b_de, dn + BIN_LINE_LEN * b_dn)]
+            if blocked:
+                blocked_segs.append(seg)
+            else:
+                free_segs.append(seg)
 
-        # Chosen direction arrow
+        free_lc.set_segments(free_segs)
+        blocked_lc.set_segments(blocked_segs)
+
+        # Chosen direction
         if chosen is not None:
-            c_yaw, s_yaw = math.cos(yaw), math.sin(yaw)
-            cx_n = math.cos(chosen) * c_yaw + math.sin(chosen) * (-s_yaw)
-            cx_e = math.cos(chosen) * s_yaw + math.sin(chosen) * c_yaw
-            arrow_len = BIN_LINE_LEN * 1.5
-            chosen_arrow.xy = (de + arrow_len * cx_e, dn + arrow_len * cx_n)
-            chosen_arrow.set_position((de, dn))
-            chosen_arrow.set_visible(True)
+            c_dn, c_de = _body_to_ned(chosen, yaw)
+            chosen_line.set_data(
+                [de, de + ARROW_LEN * c_de],
+                [dn, dn + ARROW_LEN * c_dn])
+            chosen_line.set_visible(True)
         else:
-            chosen_arrow.set_visible(False)
+            chosen_line.set_visible(False)
 
         # Auto-scale on first real data
         if state["first"]:
@@ -169,10 +170,11 @@ def run_viz(queue: mp.Queue):
             if wps:
                 all_e = [w[1] for w in wps] + [p[1] for p in PILLAR_NED] + [de]
                 all_n = [w[0] for w in wps] + [p[0] for p in PILLAR_NED] + [dn]
-                pad = 2.0
+                pad = 2.5
                 ax.set_xlim(min(all_e) - pad, max(all_e) + pad)
                 ax.set_ylim(min(all_n) - pad, max(all_n) + pad)
 
+        fig.canvas.draw_idle()
         return []
 
     _anim = FuncAnimation(fig, _update, interval=100, blit=False, cache_frame_data=False)
