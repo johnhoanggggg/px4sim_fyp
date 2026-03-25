@@ -38,23 +38,23 @@ VEL_SMOOTH = 0.3         # EMA alpha for velocity smoothing
 
 # Waypoints in NED (north, east, down, label)
 #
-# Structure (ENU): 7 pitched timber trusses running E-W at y=0,1.8..10.8
+# Structure (ENU): 7 pitched timber trusses running E-W at y=5,6.8..15.8
 #   Span x=-3.5..3.5, bottom chord z=1.5, peak z=3.5
 #   Collar ties: t0(z=2.5), t2(z=3.0), t3(z=2.5), t5(z=3.0), t6(z=2.5)
-#   Noggins: y=0.9 x=-1 z=2.3, y=4.5 x=1.5 z=2.0,
-#            y=6.3 x=-1.5 z=2.8, y=9.9 x=0.5 z=2.5
+#   Drone spawns at ENU (0,0) = 5 m south of first truss.
 #   NED: north=enu_y, east=enu_x, down=-enu_z
 WAYPOINTS = [
-    (-0.5,   0.0,  -2.5,  "Takeoff south of structure"),
-    ( 0.9,   1.0,  -2.0,  "Bay 0-1: right side, below collar z=2.5"),
-    ( 2.7,   0.0,  -3.0,  "Bay 1-2: fly high, no collar on t1"),
-    ( 4.5,  -1.0,  -2.5,  "Bay 2-3: left, below t2 collar z=3.0"),
-    ( 6.3,   1.0,  -2.5,  "Bay 3-4: right, avoid noggin x=-1.5"),
-    ( 8.1,   0.0,  -3.2,  "Bay 4-5: high, no collar on t4"),
-    ( 9.9,  -0.5,  -2.0,  "Bay 5-6: low, below t5 collar z=3.0"),
-    (11.5,   0.0,  -2.5,  "Exit north"),
-    ( 5.4,   0.0,  -4.0,  "Return high over structure"),
-    (-0.5,   0.0,  -2.5,  "Home"),
+    ( 0.0,   0.0,  -1.2,  "Takeoff south of structure"),
+    ( 3.0,   0.0,  -1.2,  "Approach structure low"),
+    ( 5.9,   1.0,  -2.0,  "Bay 0-1: right side, below collar z=2.5"),
+    ( 7.7,   0.0,  -3.0,  "Bay 1-2: fly high, no collar on t1"),
+    ( 9.5,  -1.0,  -2.5,  "Bay 2-3: left, below t2 collar z=3.0"),
+    (11.3,   1.0,  -2.5,  "Bay 3-4: right, avoid noggin x=-1.5"),
+    (13.1,   0.0,  -3.2,  "Bay 4-5: high, no collar on t4"),
+    (14.9,  -0.5,  -2.0,  "Bay 5-6: low, below t5 collar z=3.0"),
+    (16.5,   0.0,  -2.5,  "Exit north"),
+    (10.4,   0.0,  -4.0,  "Return high over structure"),
+    ( 0.0,   0.0,  -1.2,  "Home"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -207,7 +207,7 @@ def wait_until_reached(x, y, z, tolerance=WAYPOINT_TOL, timeout=15):
 
 # Truss member positions in NED for visualizer (king posts + web verticals)
 # ENU (x,y) → NED (north=y, east=x)
-_TRUSS_Y_VALS = (0, 1.8, 3.6, 5.4, 7.2, 9.0, 10.8)
+_TRUSS_Y_VALS = (5.0, 6.8, 8.6, 10.4, 12.2, 14.0, 15.8)
 _COL_POSITIONS_NED = []
 for _y in _TRUSS_Y_VALS:
     _COL_POSITIONS_NED.append((_y, 0))        # king post
@@ -411,8 +411,8 @@ try:
 
     # Takeoff
     print("\n>>> Takeoff...")
-    set_target(0, 0, -3.0)
-    wait_until_reached(0, 0, -3.0, tolerance=0.4, timeout=15)
+    set_target(0, 0, -1.2)
+    wait_until_reached(0, 0, -1.2, tolerance=0.4, timeout=15)
 
     # Fly through truss lattice with 3-D FGM
     print(f"\nEnabling 3-D FGM obstacle avoidance (bubble={fgm.bubble_radius}m)...")

@@ -51,8 +51,10 @@
       =====================================
       7 parallel pitched Fink trusses running E-W (along X), spaced 1.8 m along Y.
       Each truss: bottom chord + 2 sloped rafters + king post + 2 diagonal webs.
+      Structure starts at y = 5 (drone spawns at origin, 5 m south).
 
       Span:         x = -3.5 to +3.5  (7 m)
+      Y extent:     y = 5.0 to 15.8
       Bottom chord: z = 1.5
       Ridge peak:   z = 3.5            (2 m rise over 3.5 m run)
       Rafter angle: atan2(2,3.5) = 29.7 deg = 0.5191 rad
@@ -70,31 +72,31 @@
     <!-- ============================================================ -->
     <!--  TRUSS 0  (y = 0)  +  collar tie at z = 2.5                -->
     <!-- ============================================================ -->
-    <model name="t0_bchord"><static>true</static><pose>0 0 1.5 0 0 0</pose><link name="link">
+    <model name="t0_bchord"><static>true</static><pose>0 5.0 1.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>7.0 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>7.0 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t0_lraft"><static>true</static><pose>-1.75 0 2.5 0 -0.5191 0</pose><link name="link">
+    <model name="t0_lraft"><static>true</static><pose>-1.75 5.0 2.5 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t0_rraft"><static>true</static><pose>1.75 0 2.5 0 0.5191 0</pose><link name="link">
+    <model name="t0_rraft"><static>true</static><pose>1.75 5.0 2.5 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t0_kpost"><static>true</static><pose>0 0 2.5 0 0 0</pose><link name="link">
+    <model name="t0_kpost"><static>true</static><pose>0 5.0 2.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.10 0.10 2.0</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.10 0.10 2.0</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t0_ldiag"><static>true</static><pose>-0.875 0 2.0 0 0.5191 0</pose><link name="link">
+    <model name="t0_ldiag"><static>true</static><pose>-0.875 5.0 2.0 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t0_rdiag"><static>true</static><pose>0.875 0 2.0 0 -0.5191 0</pose><link name="link">
+    <model name="t0_rdiag"><static>true</static><pose>0.875 5.0 2.0 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t0_collar"><static>true</static><pose>0 0 2.5 0 0 0</pose><link name="link">
+    <model name="t0_collar"><static>true</static><pose>0 5.0 2.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>3.5 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>3.5 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
@@ -102,27 +104,27 @@
     <!-- ============================================================ -->
     <!--  TRUSS 1  (y = 1.8)  — no collar tie                       -->
     <!-- ============================================================ -->
-    <model name="t1_bchord"><static>true</static><pose>0 1.8 1.5 0 0 0</pose><link name="link">
+    <model name="t1_bchord"><static>true</static><pose>0 6.8 1.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>7.0 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>7.0 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t1_lraft"><static>true</static><pose>-1.75 1.8 2.5 0 -0.5191 0</pose><link name="link">
+    <model name="t1_lraft"><static>true</static><pose>-1.75 6.8 2.5 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t1_rraft"><static>true</static><pose>1.75 1.8 2.5 0 0.5191 0</pose><link name="link">
+    <model name="t1_rraft"><static>true</static><pose>1.75 6.8 2.5 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t1_kpost"><static>true</static><pose>0 1.8 2.5 0 0 0</pose><link name="link">
+    <model name="t1_kpost"><static>true</static><pose>0 6.8 2.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.10 0.10 2.0</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.10 0.10 2.0</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t1_ldiag"><static>true</static><pose>-0.875 1.8 2.0 0 0.5191 0</pose><link name="link">
+    <model name="t1_ldiag"><static>true</static><pose>-0.875 6.8 2.0 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t1_rdiag"><static>true</static><pose>0.875 1.8 2.0 0 -0.5191 0</pose><link name="link">
+    <model name="t1_rdiag"><static>true</static><pose>0.875 6.8 2.0 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
@@ -130,31 +132,31 @@
     <!-- ============================================================ -->
     <!--  TRUSS 2  (y = 3.6)  +  collar tie at z = 3.0              -->
     <!-- ============================================================ -->
-    <model name="t2_bchord"><static>true</static><pose>0 3.6 1.5 0 0 0</pose><link name="link">
+    <model name="t2_bchord"><static>true</static><pose>0 8.6 1.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>7.0 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>7.0 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t2_lraft"><static>true</static><pose>-1.75 3.6 2.5 0 -0.5191 0</pose><link name="link">
+    <model name="t2_lraft"><static>true</static><pose>-1.75 8.6 2.5 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t2_rraft"><static>true</static><pose>1.75 3.6 2.5 0 0.5191 0</pose><link name="link">
+    <model name="t2_rraft"><static>true</static><pose>1.75 8.6 2.5 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t2_kpost"><static>true</static><pose>0 3.6 2.5 0 0 0</pose><link name="link">
+    <model name="t2_kpost"><static>true</static><pose>0 8.6 2.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.10 0.10 2.0</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.10 0.10 2.0</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t2_ldiag"><static>true</static><pose>-0.875 3.6 2.0 0 0.5191 0</pose><link name="link">
+    <model name="t2_ldiag"><static>true</static><pose>-0.875 8.6 2.0 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t2_rdiag"><static>true</static><pose>0.875 3.6 2.0 0 -0.5191 0</pose><link name="link">
+    <model name="t2_rdiag"><static>true</static><pose>0.875 8.6 2.0 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t2_collar"><static>true</static><pose>0 3.6 3.0 0 0 0</pose><link name="link">
+    <model name="t2_collar"><static>true</static><pose>0 8.6 3.0 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>1.75 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>1.75 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
@@ -162,31 +164,31 @@
     <!-- ============================================================ -->
     <!--  TRUSS 3  (y = 5.4)  +  collar tie at z = 2.5              -->
     <!-- ============================================================ -->
-    <model name="t3_bchord"><static>true</static><pose>0 5.4 1.5 0 0 0</pose><link name="link">
+    <model name="t3_bchord"><static>true</static><pose>0 10.4 1.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>7.0 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>7.0 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t3_lraft"><static>true</static><pose>-1.75 5.4 2.5 0 -0.5191 0</pose><link name="link">
+    <model name="t3_lraft"><static>true</static><pose>-1.75 10.4 2.5 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t3_rraft"><static>true</static><pose>1.75 5.4 2.5 0 0.5191 0</pose><link name="link">
+    <model name="t3_rraft"><static>true</static><pose>1.75 10.4 2.5 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t3_kpost"><static>true</static><pose>0 5.4 2.5 0 0 0</pose><link name="link">
+    <model name="t3_kpost"><static>true</static><pose>0 10.4 2.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.10 0.10 2.0</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.10 0.10 2.0</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t3_ldiag"><static>true</static><pose>-0.875 5.4 2.0 0 0.5191 0</pose><link name="link">
+    <model name="t3_ldiag"><static>true</static><pose>-0.875 10.4 2.0 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t3_rdiag"><static>true</static><pose>0.875 5.4 2.0 0 -0.5191 0</pose><link name="link">
+    <model name="t3_rdiag"><static>true</static><pose>0.875 10.4 2.0 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t3_collar"><static>true</static><pose>0 5.4 2.5 0 0 0</pose><link name="link">
+    <model name="t3_collar"><static>true</static><pose>0 10.4 2.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>3.5 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>3.5 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
@@ -194,27 +196,27 @@
     <!-- ============================================================ -->
     <!--  TRUSS 4  (y = 7.2)  — no collar tie                       -->
     <!-- ============================================================ -->
-    <model name="t4_bchord"><static>true</static><pose>0 7.2 1.5 0 0 0</pose><link name="link">
+    <model name="t4_bchord"><static>true</static><pose>0 12.2 1.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>7.0 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>7.0 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t4_lraft"><static>true</static><pose>-1.75 7.2 2.5 0 -0.5191 0</pose><link name="link">
+    <model name="t4_lraft"><static>true</static><pose>-1.75 12.2 2.5 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t4_rraft"><static>true</static><pose>1.75 7.2 2.5 0 0.5191 0</pose><link name="link">
+    <model name="t4_rraft"><static>true</static><pose>1.75 12.2 2.5 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t4_kpost"><static>true</static><pose>0 7.2 2.5 0 0 0</pose><link name="link">
+    <model name="t4_kpost"><static>true</static><pose>0 12.2 2.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.10 0.10 2.0</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.10 0.10 2.0</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t4_ldiag"><static>true</static><pose>-0.875 7.2 2.0 0 0.5191 0</pose><link name="link">
+    <model name="t4_ldiag"><static>true</static><pose>-0.875 12.2 2.0 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t4_rdiag"><static>true</static><pose>0.875 7.2 2.0 0 -0.5191 0</pose><link name="link">
+    <model name="t4_rdiag"><static>true</static><pose>0.875 12.2 2.0 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
@@ -222,31 +224,31 @@
     <!-- ============================================================ -->
     <!--  TRUSS 5  (y = 9.0)  +  collar tie at z = 3.0              -->
     <!-- ============================================================ -->
-    <model name="t5_bchord"><static>true</static><pose>0 9.0 1.5 0 0 0</pose><link name="link">
+    <model name="t5_bchord"><static>true</static><pose>0 14.0 1.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>7.0 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>7.0 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t5_lraft"><static>true</static><pose>-1.75 9.0 2.5 0 -0.5191 0</pose><link name="link">
+    <model name="t5_lraft"><static>true</static><pose>-1.75 14.0 2.5 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t5_rraft"><static>true</static><pose>1.75 9.0 2.5 0 0.5191 0</pose><link name="link">
+    <model name="t5_rraft"><static>true</static><pose>1.75 14.0 2.5 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t5_kpost"><static>true</static><pose>0 9.0 2.5 0 0 0</pose><link name="link">
+    <model name="t5_kpost"><static>true</static><pose>0 14.0 2.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.10 0.10 2.0</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.10 0.10 2.0</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t5_ldiag"><static>true</static><pose>-0.875 9.0 2.0 0 0.5191 0</pose><link name="link">
+    <model name="t5_ldiag"><static>true</static><pose>-0.875 14.0 2.0 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t5_rdiag"><static>true</static><pose>0.875 9.0 2.0 0 -0.5191 0</pose><link name="link">
+    <model name="t5_rdiag"><static>true</static><pose>0.875 14.0 2.0 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t5_collar"><static>true</static><pose>0 9.0 3.0 0 0 0</pose><link name="link">
+    <model name="t5_collar"><static>true</static><pose>0 14.0 3.0 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>1.75 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>1.75 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
@@ -254,31 +256,31 @@
     <!-- ============================================================ -->
     <!--  TRUSS 6  (y = 10.8)  +  collar tie at z = 2.5             -->
     <!-- ============================================================ -->
-    <model name="t6_bchord"><static>true</static><pose>0 10.8 1.5 0 0 0</pose><link name="link">
+    <model name="t6_bchord"><static>true</static><pose>0 15.8 1.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>7.0 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>7.0 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t6_lraft"><static>true</static><pose>-1.75 10.8 2.5 0 -0.5191 0</pose><link name="link">
+    <model name="t6_lraft"><static>true</static><pose>-1.75 15.8 2.5 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t6_rraft"><static>true</static><pose>1.75 10.8 2.5 0 0.5191 0</pose><link name="link">
+    <model name="t6_rraft"><static>true</static><pose>1.75 15.8 2.5 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>4.031 0.12 0.12</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>4.031 0.12 0.12</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="t6_kpost"><static>true</static><pose>0 10.8 2.5 0 0 0</pose><link name="link">
+    <model name="t6_kpost"><static>true</static><pose>0 15.8 2.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.10 0.10 2.0</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.10 0.10 2.0</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t6_ldiag"><static>true</static><pose>-0.875 10.8 2.0 0 0.5191 0</pose><link name="link">
+    <model name="t6_ldiag"><static>true</static><pose>-0.875 15.8 2.0 0 0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t6_rdiag"><static>true</static><pose>0.875 10.8 2.0 0 -0.5191 0</pose><link name="link">
+    <model name="t6_rdiag"><static>true</static><pose>0.875 15.8 2.0 0 -0.5191 0</pose><link name="link">
         <collision name="c"><geometry><box><size>2.016 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>2.016 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
-    <model name="t6_collar"><static>true</static><pose>0 10.8 2.5 0 0 0</pose><link name="link">
+    <model name="t6_collar"><static>true</static><pose>0 15.8 2.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>3.5 0.10 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>3.5 0.10 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
@@ -288,27 +290,27 @@
     <!--  Sit on top of rafters, running full structure length        -->
     <!-- ============================================================ -->
     <!-- Ridge purlin -->
-    <model name="p_ridge"><static>true</static><pose>0 5.4 3.56 0 0 0</pose><link name="link">
+    <model name="p_ridge"><static>true</static><pose>0 10.4 3.56 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.08 11.4 0.08</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.08 11.4 0.08</size></box></geometry>
           <material><ambient>0.72 0.58 0.37 1</ambient><diffuse>0.77 0.62 0.40 1</diffuse></material></visual></link></model>
     <!-- Left mid-rafter purlin at x=-1.75, z=2.56 -->
-    <model name="p_lmid"><static>true</static><pose>-1.75 5.4 2.56 0 0 0</pose><link name="link">
+    <model name="p_lmid"><static>true</static><pose>-1.75 10.4 2.56 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.08 11.4 0.08</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.08 11.4 0.08</size></box></geometry>
           <material><ambient>0.72 0.58 0.37 1</ambient><diffuse>0.77 0.62 0.40 1</diffuse></material></visual></link></model>
     <!-- Right mid-rafter purlin at x=1.75, z=2.56 -->
-    <model name="p_rmid"><static>true</static><pose>1.75 5.4 2.56 0 0 0</pose><link name="link">
+    <model name="p_rmid"><static>true</static><pose>1.75 10.4 2.56 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.08 11.4 0.08</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.08 11.4 0.08</size></box></geometry>
           <material><ambient>0.72 0.58 0.37 1</ambient><diffuse>0.77 0.62 0.40 1</diffuse></material></visual></link></model>
     <!-- Left eave purlin at x=-3.0, z=1.79 -->
-    <model name="p_leave"><static>true</static><pose>-3.0 5.4 1.85 0 0 0</pose><link name="link">
+    <model name="p_leave"><static>true</static><pose>-3.0 10.4 1.85 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.08 11.4 0.08</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.08 11.4 0.08</size></box></geometry>
           <material><ambient>0.72 0.58 0.37 1</ambient><diffuse>0.77 0.62 0.40 1</diffuse></material></visual></link></model>
     <!-- Right eave purlin at x=3.0, z=1.85 -->
-    <model name="p_reave"><static>true</static><pose>3.0 5.4 1.85 0 0 0</pose><link name="link">
+    <model name="p_reave"><static>true</static><pose>3.0 10.4 1.85 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.08 11.4 0.08</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.08 11.4 0.08</size></box></geometry>
           <material><ambient>0.72 0.58 0.37 1</ambient><diffuse>0.77 0.62 0.40 1</diffuse></material></visual></link></model>
@@ -318,22 +320,22 @@
     <!--  Short beams running between adjacent trusses               -->
     <!-- ============================================================ -->
     <!-- Between truss 0-1 at x=-1.0, z=2.3 -->
-    <model name="nog_01"><static>true</static><pose>-1.0 0.9 2.3 0 0 0</pose><link name="link">
+    <model name="nog_01"><static>true</static><pose>-1.0 5.9 2.3 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.10 1.6 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.10 1.6 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
     <!-- Between truss 2-3 at x=1.5, z=2.0 -->
-    <model name="nog_23"><static>true</static><pose>1.5 4.5 2.0 0 0 0</pose><link name="link">
+    <model name="nog_23"><static>true</static><pose>1.5 9.5 2.0 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.10 1.6 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.10 1.6 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
     <!-- Between truss 3-4 at x=-1.5, z=2.8 -->
-    <model name="nog_34"><static>true</static><pose>-1.5 6.3 2.8 0 0 0</pose><link name="link">
+    <model name="nog_34"><static>true</static><pose>-1.5 11.3 2.8 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.10 1.6 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.10 1.6 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
     <!-- Between truss 5-6 at x=0.5, z=2.5 -->
-    <model name="nog_56"><static>true</static><pose>0.5 9.9 2.5 0 0 0</pose><link name="link">
+    <model name="nog_56"><static>true</static><pose>0.5 14.9 2.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.10 1.6 0.10</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.10 1.6 0.10</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
@@ -344,13 +346,13 @@
     <!-- ============================================================ -->
     <!-- Between t1-t2 at x=0: from (0,1.8,1.5) to (0,3.6,3.0) -->
     <!-- dy=1.8 dz=1.5 len=2.343 roll=atan2(1.8,1.5)=0.876 -->
-    <model name="xb_12"><static>true</static><pose>0 2.7 2.25 0.876 0 0</pose><link name="link">
+    <model name="xb_12"><static>true</static><pose>0 7.7 2.25 0.876 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.08 0.08 2.343</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.08 0.08 2.343</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
     <!-- Between t4-t5 at x=-1: from (-1,7.2,2.0) to (-1,9.0,3.0) -->
     <!-- dy=1.8 dz=1.0 len=2.059 roll=atan2(1.8,1.0)=1.064 -->
-    <model name="xb_45"><static>true</static><pose>-1 8.1 2.5 1.064 0 0</pose><link name="link">
+    <model name="xb_45"><static>true</static><pose>-1 13.1 2.5 1.064 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.08 0.08 2.059</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.08 0.08 2.059</size></box></geometry>
           <material><ambient>0.70 0.56 0.35 1</ambient><diffuse>0.75 0.60 0.38 1</diffuse></material></visual></link></model>
@@ -358,11 +360,11 @@
     <!-- ============================================================ -->
     <!--  EAVE BOARDS  (fascia at rafter ends)                       -->
     <!-- ============================================================ -->
-    <model name="eave_l"><static>true</static><pose>-3.5 5.4 1.5 0 0 0</pose><link name="link">
+    <model name="eave_l"><static>true</static><pose>-3.5 10.4 1.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.12 11.4 0.20</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.12 11.4 0.20</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
-    <model name="eave_r"><static>true</static><pose>3.5 5.4 1.5 0 0 0</pose><link name="link">
+    <model name="eave_r"><static>true</static><pose>3.5 10.4 1.5 0 0 0</pose><link name="link">
         <collision name="c"><geometry><box><size>0.12 11.4 0.20</size></box></geometry></collision>
         <visual name="v"><geometry><box><size>0.12 11.4 0.20</size></box></geometry>
           <material><ambient>0.75 0.60 0.38 1</ambient><diffuse>0.80 0.65 0.42 1</diffuse></material></visual></link></model>
