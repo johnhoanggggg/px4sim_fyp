@@ -1,220 +1,439 @@
 #!/usr/bin/env python3
 """
-FGM3D — 3-D Follow-the-Gap Method for obstacle avoidance.
+FGM3D — True 3-D Follow-the-Gap Method on a spherical scan.
 
-Extends FGM2D with vertical (Z-axis) avoidance so the drone can navigate
-multi-layer truss lattices where obstacles exist above and below.
+Instead of separating horizontal and vertical avoidance, this projects all
+obstacle points onto a unit sphere (azimuth + elevation), builds a 2-D
+blocked/free map, finds 3-D gaps, and steers toward the best gap closest
+to the goal direction.  The output is a full (vx, vy, vz) velocity in
+body FLU frame.
 
-Horizontal avoidance:
-    Uses FGM2D on obstacle points filtered near the drone's altitude.
-
-Vertical avoidance:
-    Computes safe vertical velocity by measuring clearance above and below,
-    applying repulsive forces when ceiling/floor obstacles are close, and
-    blending with the desired altitude from the waypoint.
-
-Returns (vx, vy, vz) in body FLU frame.
+Sphere discretisation:
+    - n_az   azimuth bins   covering [-pi, pi)      (horizontal)
+    - n_el   elevation bins covering [-el_max, el_max] (vertical)
+    Each cell is a small solid-angle patch.  Obstacle points that fall
+    within max_range are projected onto cells and mark them blocked
+    (with bubble inflation).  Contiguous free regions are found via
+    flood-fill, scored by proximity to the goal direction, and the
+    best steering direction is picked.
 """
 
 import math
 import numpy as np
 
-from fgm2d import FGM2D
-
 
 class FGM3D:
     """
-    3-D Follow-the-Gap planner.
+    True 3-D Follow-the-Gap planner on a spherical scan.
 
     Parameters
     ----------
-    n_rays, max_range, bubble_radius, safe_distance, max_speed,
-    gap_weight_goal, gap_weight_width, min_gap_width_deg, edge_margin_deg :
-        Passed through to FGM2D for horizontal avoidance.
-    z_band : float
-        Vertical half-band (m) for filtering obstacle points that count
-        as horizontal-plane threats.  Points with |Z| > z_band are ignored
-        by the 2-D planner (but still used for vertical clearance).
-    vert_safe : float
-        Minimum safe vertical clearance (m).  Below this, repulsive
-        vertical velocity kicks in.
-    max_vz : float
-        Maximum vertical speed (m/s).
-    vz_gain : float
-        P-gain for altitude tracking (vz = gain * altitude_error).
+    n_az : int
+        Azimuth bins (horizontal, default 72 = 5 deg each).
+    n_el : int
+        Elevation bins (vertical, default 18 = ~10 deg each for ±90 deg).
+    max_range : float
+        Sensing range (m).
+    bubble_radius : float
+        Safety inflation around obstacles (m), >= drone radius.
+    safe_distance : float
+        Distance below which speed is reduced.
+    max_speed : float
+        Maximum output speed (m/s).
+    gap_weight_goal : float
+        Weight for angular distance from steering point to goal.
+    gap_weight_width : float
+        Bonus for larger gap regions.
+    min_gap_cells : int
+        Minimum number of contiguous free cells to count as a gap.
+    edge_margin_deg : float
+        Pull steering point inward from gap boundary (deg).
+    el_max_deg : float
+        Maximum elevation angle (deg).  90 = full hemisphere up/down.
     """
 
     def __init__(
         self,
-        # FGM2D params
-        n_rays: int = 72,
+        n_az: int = 72,
+        n_el: int = 18,
         max_range: float = 1.5,
         bubble_radius: float = 0.3,
         safe_distance: float = 0.8,
         max_speed: float = 0.6,
         gap_weight_goal: float = 2.0,
         gap_weight_width: float = 0.3,
-        min_gap_width_deg: float = 10.0,
-        edge_margin_deg: float = 10.0,
-        # 3-D specific
-        z_band: float = 0.8,
-        vert_safe: float = 0.6,
-        max_vz: float = 0.5,
-        vz_gain: float = 1.2,
+        min_gap_cells: int = 4,
+        edge_margin_deg: float = 8.0,
+        el_max_deg: float = 70.0,
     ):
-        self.fgm2d = FGM2D(
-            n_rays=n_rays,
-            max_range=max_range,
-            bubble_radius=bubble_radius,
-            safe_distance=safe_distance,
-            max_speed=max_speed,
-            gap_weight_goal=gap_weight_goal,
-            gap_weight_width=gap_weight_width,
-            min_gap_width_deg=min_gap_width_deg,
-            edge_margin_deg=edge_margin_deg,
+        self.n_az = n_az
+        self.n_el = n_el
+        self.max_range = max_range
+        self._bubble_radius = bubble_radius
+        self.safe_distance = safe_distance
+        self.max_speed = max_speed
+        self.gap_weight_goal = gap_weight_goal
+        self.gap_weight_width = gap_weight_width
+        self.min_gap_cells = min_gap_cells
+        self.edge_margin = math.radians(edge_margin_deg)
+        self.el_max = math.radians(el_max_deg)
+
+        # Azimuth bin centres [-pi, pi)
+        self._az_res = 2 * math.pi / n_az
+        self._az_centres = np.array(
+            [-math.pi + (i + 0.5) * self._az_res for i in range(n_az)]
         )
-        self.z_band = z_band
-        self.vert_safe = vert_safe
-        self.max_vz = max_vz
-        self.vz_gain = vz_gain
+
+        # Elevation bin centres [-el_max, +el_max]
+        self._el_res = 2 * self.el_max / n_el
+        self._el_centres = np.array(
+            [-self.el_max + (i + 0.5) * self._el_res for i in range(n_el)]
+        )
+
+        # Pre-compute unit direction for each cell (n_el, n_az, 3)
+        az_grid, el_grid = np.meshgrid(self._az_centres, self._el_centres)
+        cos_el = np.cos(el_grid)
+        self._cell_dirs = np.stack([
+            cos_el * np.cos(az_grid),   # X (forward)
+            cos_el * np.sin(az_grid),   # Y (left)
+            np.sin(el_grid),            # Z (up)
+        ], axis=-1)
+
+        # State
+        self._blocked = np.zeros((n_el, n_az), dtype=bool)
+        self._range_map = np.full((n_el, n_az), max_range)
+        self._last_chosen_az: float | None = None
+        self._last_chosen_el: float | None = None
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def update(
-        self,
-        obstacle_pts: np.ndarray,
-        goal_body: tuple,
-    ) -> tuple:
+    def update(self, obstacle_pts: np.ndarray, goal_body: tuple) -> tuple:
         """
-        Compute a safe 3-D velocity in body FLU frame.
+        Compute safe 3-D velocity in body FLU.
 
         Args:
-            obstacle_pts: (N, 3) body-FLU points (X fwd, Y left, Z up).
-            goal_body:    (gx, gy, gz) desired direction in body FLU.
-                          gz > 0 means the goal is above the drone.
+            obstacle_pts: (N, 3) in body FLU (X fwd, Y left, Z up).
+            goal_body:    (gx, gy, gz) goal direction in body FLU.
 
         Returns:
             (vx, vy, vz) velocity in body FLU.
         """
-        gx, gy = float(goal_body[0]), float(goal_body[1])
+        gx = float(goal_body[0])
+        gy = float(goal_body[1])
         gz = float(goal_body[2]) if len(goal_body) > 2 else 0.0
 
-        # --- Horizontal avoidance (XY plane) ---
+        goal_dist = math.sqrt(gx**2 + gy**2 + gz**2)
+        goal_az = math.atan2(gy, gx)
+        goal_el = math.atan2(gz, math.sqrt(gx**2 + gy**2)) if goal_dist > 0.01 else 0.0
+
+        # 1. Build spherical range map and blocked mask
+        self._build_map(obstacle_pts)
+
+        # 2. Find min obstacle distance (for speed scaling)
+        min_obs_dist = float('inf')
         if len(obstacle_pts) > 0:
-            z_mask = (obstacle_pts[:, 2] > -self.z_band) & \
-                     (obstacle_pts[:, 2] < self.z_band)
-            xy_pts = obstacle_pts[z_mask]
-        else:
-            xy_pts = obstacle_pts
+            dists = np.sqrt(np.sum(obstacle_pts**2, axis=1))
+            valid = dists > 0.05
+            if np.any(valid):
+                min_obs_dist = float(np.min(dists[valid]))
 
-        vx, vy = self.fgm2d.update(xy_pts, (gx, gy))
+        # 3. Find gaps via connected-component flood fill
+        gaps = self._find_gaps()
 
-        # --- Vertical avoidance ---
-        vz = self._compute_vz(obstacle_pts, gz)
+        # 4. No passable gap → stop
+        if not gaps:
+            self._last_chosen_az = None
+            self._last_chosen_el = None
+            return (0.0, 0.0, 0.0)
+
+        # 5. Pick best gap and steering direction
+        best_az, best_el = self._select_gap(gaps, goal_az, goal_el)
+        self._last_chosen_az = best_az
+        self._last_chosen_el = best_el
+
+        # 6. Compute speed (slow near obstacles)
+        speed = self._compute_speed(min_obs_dist)
+
+        # 7. Convert spherical steering direction to Cartesian velocity
+        cos_el = math.cos(best_el)
+        vx = speed * cos_el * math.cos(best_az)
+        vy = speed * cos_el * math.sin(best_az)
+        vz = speed * math.sin(best_el)
 
         return (vx, vy, vz)
 
-    def get_histogram(self):
-        return self.fgm2d.get_histogram()
+    def get_histogram(self) -> list[tuple[float, bool]]:
+        """Return horizontal-slice histogram for viz2d compatibility.
 
-    def get_chosen_direction(self):
-        return self.fgm2d.get_chosen_direction()
+        Projects the spherical blocked map onto the azimuth axis:
+        a ray is blocked if ANY elevation bin at that azimuth is blocked.
+        """
+        # Use the elevation band near horizontal (middle rows)
+        mid = self.n_el // 2
+        band = max(1, self.n_el // 6)
+        lo, hi = max(0, mid - band), min(self.n_el, mid + band + 1)
+        horiz_blocked = np.any(self._blocked[lo:hi, :], axis=0)
+        return list(zip(self._az_centres.tolist(), horiz_blocked.tolist()))
+
+    def get_chosen_direction(self) -> float | None:
+        """Return chosen azimuth for viz2d compatibility."""
+        return self._last_chosen_az
 
     def reset(self):
-        self.fgm2d.reset()
+        self._blocked[:] = False
+        self._range_map[:] = self.max_range
+        self._last_chosen_az = None
+        self._last_chosen_el = None
 
     @property
     def bubble_radius(self):
-        return self.fgm2d.bubble_radius
+        return self._bubble_radius
 
     # ------------------------------------------------------------------
-    # Vertical clearance
+    # Spherical map building
     # ------------------------------------------------------------------
 
-    def _compute_vz(self, pts: np.ndarray, goal_z: float) -> float:
+    def _build_map(self, pts: np.ndarray):
+        """Project obstacle points onto the spherical grid and inflate."""
+        self._blocked[:] = False
+        self._range_map[:] = self.max_range
+
+        if len(pts) == 0:
+            return
+
+        dists = np.sqrt(np.sum(pts**2, axis=1))
+        valid = (dists > 0.05) & (dists < self.max_range)
+        if not np.any(valid):
+            return
+
+        pts_v = pts[valid]
+        d_v = dists[valid]
+
+        # Spherical coords of each point
+        az = np.arctan2(pts_v[:, 1], pts_v[:, 0])
+        el = np.arctan2(pts_v[:, 2], np.sqrt(pts_v[:, 0]**2 + pts_v[:, 1]**2))
+
+        # Bin indices
+        az_idx = ((az + math.pi) / self._az_res).astype(int) % self.n_az
+        el_idx = ((el + self.el_max) / self._el_res).astype(int)
+        el_idx = np.clip(el_idx, 0, self.n_el - 1)
+
+        # Fill range map (min range per cell)
+        np.minimum.at(self._range_map, (el_idx, az_idx), d_v)
+
+        # Inflate: for each obstacle, block all cells within angular radius
+        for i in range(len(d_v)):
+            half_ang = math.asin(min(self.bubble_radius / d_v[i], 1.0))
+
+            # Determine which cells are within half_ang of this obstacle
+            # Use great-circle angular distance from obstacle direction to each cell
+            obs_dir = pts_v[i] / d_v[i]  # unit vector
+            # Dot product with all cell directions
+            dots = np.sum(self._cell_dirs * obs_dir, axis=-1)
+            dots = np.clip(dots, -1.0, 1.0)
+            ang_dist = np.arccos(dots)
+
+            self._blocked |= (ang_dist <= half_ang)
+
+    # ------------------------------------------------------------------
+    # 3-D gap finding via flood fill on the spherical grid
+    # ------------------------------------------------------------------
+
+    def _find_gaps(self):
         """
-        Compute safe vertical velocity.
+        Find connected free regions on the spherical blocked grid.
 
-        goal_z : positive = goal is above, negative = below.
+        Returns list of gaps, each: (cell_indices, size)
+        where cell_indices is a list of (el_idx, az_idx) tuples.
+        Only gaps with >= min_gap_cells are returned.
         """
-        ceil_dist = float('inf')
-        floor_dist = float('inf')
+        free = ~self._blocked
+        if not np.any(free):
+            return []
 
-        if len(pts) > 0:
-            # Only consider points horizontally close (within 1.0 m)
-            horiz_dist = np.sqrt(pts[:, 0] ** 2 + pts[:, 1] ** 2)
-            close = pts[horiz_dist < 1.0]
+        visited = np.zeros_like(free, dtype=bool)
+        gaps = []
 
-            if len(close) > 0:
-                above = close[close[:, 2] > 0.15]
-                below = close[close[:, 2] < -0.15]
-                if len(above) > 0:
-                    ceil_dist = float(np.min(above[:, 2]))
-                if len(below) > 0:
-                    floor_dist = float(-np.max(below[:, 2]))
+        for ei in range(self.n_el):
+            for ai in range(self.n_az):
+                if free[ei, ai] and not visited[ei, ai]:
+                    # Flood fill
+                    cells = []
+                    stack = [(ei, ai)]
+                    visited[ei, ai] = True
+                    while stack:
+                        ce, ca = stack.pop()
+                        cells.append((ce, ca))
+                        # 4-connected neighbours (azimuth wraps, elevation doesn't)
+                        for de, da in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                            ne = ce + de
+                            na = (ca + da) % self.n_az  # azimuth wraps
+                            if ne < 0 or ne >= self.n_el:
+                                continue
+                            if free[ne, na] and not visited[ne, na]:
+                                visited[ne, na] = True
+                                stack.append((ne, na))
 
-        # Desired vz toward goal altitude
-        if abs(goal_z) > 0.15:
-            vz = self.vz_gain * np.clip(goal_z, -1.0, 1.0)
-            vz = float(np.clip(vz, -self.max_vz, self.max_vz))
-        else:
-            vz = 0.0
+                    if len(cells) >= self.min_gap_cells:
+                        gaps.append(cells)
 
-        # Repulsion from ceiling
-        if ceil_dist < self.vert_safe:
-            ratio = 1.0 - ceil_dist / self.vert_safe
-            repulsion = -self.max_vz * ratio
-            if vz > 0:
-                # Trying to go up toward ceiling — override
-                vz = min(vz, repulsion)
-            else:
-                vz += repulsion
+        return gaps
 
-        # Repulsion from floor
-        if floor_dist < self.vert_safe:
-            ratio = 1.0 - floor_dist / self.vert_safe
-            repulsion = self.max_vz * ratio
-            if vz < 0:
-                # Trying to go down toward floor — override
-                vz = max(vz, repulsion)
-            else:
-                vz += repulsion
+    def _select_gap(self, gaps, goal_az: float, goal_el: float) -> tuple:
+        """
+        Pick the best gap and return (az, el) steering direction.
 
-        return float(np.clip(vz, -self.max_vz, self.max_vz))
+        For each gap, find the free cell closest to the goal direction.
+        Score gaps by angular proximity to goal + size bonus.
+        """
+        best_score = float('inf')
+        best_az = goal_az
+        best_el = goal_el
+
+        goal_dir = np.array([
+            math.cos(goal_el) * math.cos(goal_az),
+            math.cos(goal_el) * math.sin(goal_az),
+            math.sin(goal_el),
+        ])
+
+        for cells in gaps:
+            gap_size = len(cells)
+
+            # Find cell in this gap closest to goal direction
+            min_ang = float('inf')
+            steer_az, steer_el = goal_az, goal_el
+
+            for ei, ai in cells:
+                cell_dir = self._cell_dirs[ei, ai]
+                dot = float(np.dot(cell_dir, goal_dir))
+                dot = max(-1.0, min(1.0, dot))
+                ang = math.acos(dot)
+                if ang < min_ang:
+                    min_ang = ang
+                    steer_az = self._az_centres[ai]
+                    steer_el = self._el_centres[ei]
+
+            # Pull steering point inward from gap boundary
+            steer_az, steer_el = self._pull_from_boundary(
+                cells, steer_az, steer_el, goal_dir
+            )
+
+            score = (self.gap_weight_goal * min_ang
+                     - self.gap_weight_width * gap_size * self._az_res * self._el_res)
+
+            if score < best_score:
+                best_score = score
+                best_az = steer_az
+                best_el = steer_el
+
+        return best_az, best_el
+
+    def _pull_from_boundary(self, cells, steer_az, steer_el, goal_dir):
+        """
+        If the chosen steering cell is at the edge of the gap, pull it
+        inward toward the gap centre to avoid shaving obstacles.
+        """
+        # Build a set of gap cells for fast lookup
+        cell_set = set(cells)
+
+        # Find the cell index of the steering point
+        ai = int((steer_az + math.pi) / self._az_res) % self.n_az
+        ei = int((steer_el + self.el_max) / self._el_res)
+        ei = max(0, min(self.n_el - 1, ei))
+
+        # Check if it's near the boundary
+        at_boundary = False
+        for de, da in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            ne = ei + de
+            na = (ai + da) % self.n_az
+            if ne < 0 or ne >= self.n_el:
+                at_boundary = True
+                break
+            if (ne, na) not in cell_set:
+                at_boundary = True
+                break
+
+        if not at_boundary:
+            return steer_az, steer_el
+
+        # Find the gap centroid and pull toward it
+        sum_az = 0.0
+        sum_el = 0.0
+        # Use circular mean for azimuth
+        sum_sin_az = 0.0
+        sum_cos_az = 0.0
+        for ce, ca in cells:
+            sum_cos_az += math.cos(self._az_centres[ca])
+            sum_sin_az += math.sin(self._az_centres[ca])
+            sum_el += self._el_centres[ce]
+
+        n = len(cells)
+        centroid_az = math.atan2(sum_sin_az / n, sum_cos_az / n)
+        centroid_el = sum_el / n
+
+        # Blend: pull margin fraction toward centroid
+        margin_frac = min(0.3, self.edge_margin / math.pi)
+        out_az = steer_az + margin_frac * _wrap_scalar(centroid_az - steer_az)
+        out_el = steer_el + margin_frac * (centroid_el - steer_el)
+
+        return out_az, out_el
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _compute_speed(self, min_obs_dist: float) -> float:
+        if min_obs_dist >= self.safe_distance:
+            return self.max_speed
+        ratio = max(min_obs_dist / self.safe_distance, 0.15)
+        return self.max_speed * ratio
+
+
+def _wrap_scalar(a):
+    return (a + math.pi) % (2 * math.pi) - math.pi
 
 
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     fgm = FGM3D(
-        n_rays=72,
+        n_az=72, n_el=18,
         max_range=3.0,
         bubble_radius=0.55,
         safe_distance=1.2,
         max_speed=0.5,
     )
 
-    # Beam above at 0.6 m — should push down
+    # Beam ahead — should steer around
+    beam = np.array([
+        [1.2, -0.1, 0.0], [1.2, 0.0, 0.0], [1.2, 0.1, 0.0],
+    ])
+    vel = fgm.update(beam, (2.0, 0.0, 0.0))
+    print(f"Beam ahead → vel=({vel[0]:.3f}, {vel[1]:.3f}, {vel[2]:.3f})")
+
+    # Beam above — should go under
+    fgm.reset()
     beam_above = np.array([
-        [0.5, -0.2, 0.6], [0.5, 0.0, 0.6], [0.5, 0.2, 0.6],
-        [-0.2, 0.0, 0.6], [0.0, 0.3, 0.6],
+        [0.5, -0.3, 0.5], [0.5, 0.0, 0.5], [0.5, 0.3, 0.5],
+        [-0.2, 0.0, 0.5], [0.0, 0.3, 0.5],
     ])
     vel = fgm.update(beam_above, (2.0, 0.0, 0.3))
-    print(f"Beam above → vel=({vel[0]:.3f}, {vel[1]:.3f}, {vel[2]:.3f})")
-    print(f"  vz should be negative (pushed down from ceiling)")
+    print(f"\nBeam above, goal up → vel=({vel[0]:.3f}, {vel[1]:.3f}, {vel[2]:.3f})")
+    print(f"  Should steer forward but avoid going up")
 
-    # Beam below at 0.5 m — should push up
+    # Rafter blocking forward-up, gap is forward-low
     fgm.reset()
-    beam_below = np.array([
-        [0.3, -0.2, -0.5], [0.3, 0.0, -0.5], [0.3, 0.2, -0.5],
+    rafter = np.array([
+        [1.0, y, 0.3 + abs(y) * 0.3]
+        for y in np.linspace(-1.0, 1.0, 15)
     ])
-    vel = fgm.update(beam_below, (2.0, 0.0, -0.3))
-    print(f"\nBeam below → vel=({vel[0]:.3f}, {vel[1]:.3f}, {vel[2]:.3f})")
-    print(f"  vz should be positive (pushed up from floor)")
+    vel = fgm.update(rafter, (2.0, 0.0, -0.5))
+    print(f"\nRafter blocking fwd-up → vel=({vel[0]:.3f}, {vel[1]:.3f}, {vel[2]:.3f})")
+    print(f"  Should go forward-and-down (vz negative)")
 
     # No obstacles — straight to goal
     fgm.reset()
     vel = fgm.update(np.empty((0, 3)), (2.0, 0.5, 1.0))
     print(f"\nNo obstacles → vel=({vel[0]:.3f}, {vel[1]:.3f}, {vel[2]:.3f})")
-    print(f"  vz should be positive (toward goal above)")
+    print(f"  Should point toward goal")

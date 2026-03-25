@@ -29,8 +29,7 @@ from viz2d import run_viz
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MAX_SPEED = 0.6          # horizontal max (m/s)
-MAX_VZ = 0.5             # vertical max (m/s)
+MAX_SPEED = 0.6          # max speed (m/s)
 SAFE_DISTANCE = 0.8
 CONTROL_HZ = 10
 WAYPOINT_TOL = 0.6
@@ -89,20 +88,17 @@ target_lock = threading.Lock()
 # ---------------------------------------------------------------------------
 tof = TofReader()
 fgm = FGM3D(
-    n_rays=72,
+    n_az=72,
+    n_el=18,
     max_range=1.5,
     bubble_radius=0.3,
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
     gap_weight_goal=2.0,
     gap_weight_width=0.3,
-    min_gap_width_deg=10.0,
+    min_gap_cells=4,
     edge_margin_deg=10.0,
-    # 3-D params
-    z_band=0.8,
-    vert_safe=0.6,
-    max_vz=MAX_VZ,
-    vz_gain=1.2,
+    el_max_deg=70.0,
 )
 
 # Visualizer (separate process) — reuses the 2-D top-down view
@@ -242,7 +238,7 @@ def fly_with_avoidance(waypoints, wp_offset=0):
     global use_pos_setpoints
     use_pos_setpoints = False
 
-    prev_vel_ned = (0.0, 0.0)   # for EMA smoothing (horizontal only)
+    prev_vel_ned = (0.0, 0.0, 0.0)   # for EMA smoothing (vx, vy, vz)
 
     for i, (wx, wy, wz, label) in enumerate(waypoints):
         wp_idx = i + wp_offset
@@ -271,57 +267,34 @@ def fly_with_avoidance(waypoints, wp_offset=0):
             # Obstacles
             pts = tof.get_obstacle_points(max_range=2.0)
 
-            # FGM3D
-            if len(pts) > 0:
-                vel_body = fgm.update(pts, goal_body)
-            else:
-                # No obstacles — direct to goal
-                goal_h = math.sqrt(goal_body[0]**2 + goal_body[1]**2)
-                if goal_h > 0.01:
-                    s = min(MAX_SPEED, goal_h) / goal_h
-                    vx_b, vy_b = goal_body[0] * s, goal_body[1] * s
-                else:
-                    vx_b, vy_b = 0.0, 0.0
-                # Vertical
-                gz = goal_body[2]
-                if abs(gz) > 0.15:
-                    vz_b = float(np.clip(gz * 1.2, -MAX_VZ, MAX_VZ))
-                else:
-                    vz_b = 0.0
-                vel_body = (vx_b, vy_b, vz_b)
+            # FGM3D — handles both obstacle and no-obstacle cases
+            vel_body = fgm.update(pts, goal_body)
 
-            # Body FLU (vx, vy) → NED
+            # Body FLU → NED
             frd_vx = vel_body[0]
             frd_vy = -vel_body[1]  # FLU→FRD
-            raw_ned = (
-                c_yaw * frd_vx - s_yaw * frd_vy,
-                s_yaw * frd_vx + c_yaw * frd_vy,
-            )
+            raw_vn = c_yaw * frd_vx - s_yaw * frd_vy
+            raw_ve = s_yaw * frd_vx + c_yaw * frd_vy
+            raw_vd = -vel_body[2]  # FLU up → NED down
 
-            # EMA smoothing (horizontal)
+            # Hard height ceiling: don't climb above waypoint altitude
+            alt_error = pz - wz  # negative = drone above target
+            if alt_error < -0.3:
+                raw_vd = max(raw_vd, 0.5)
+            elif alt_error < 0:
+                raw_vd = max(raw_vd, 0.0)
+
+            # EMA smoothing (all axes)
             a = VEL_SMOOTH
             vel_ned = (
-                a * raw_ned[0] + (1 - a) * prev_vel_ned[0],
-                a * raw_ned[1] + (1 - a) * prev_vel_ned[1],
+                a * raw_vn + (1 - a) * prev_vel_ned[0],
+                a * raw_ve + (1 - a) * prev_vel_ned[1],
+                a * raw_vd + (1 - a) * prev_vel_ned[2],
             )
             prev_vel_ned = vel_ned
 
-            # Vertical: FLU vz (up+) → NED vz (down+)
-            vz_ned = -vel_body[2]
-
-            # Hard height ceiling: never fly above waypoint altitude
-            # pz is NED down (negative = up), wz is target NED down
-            # If drone is above target (pz < wz), force descend
-            alt_error = pz - wz  # negative = drone is above target
-            if alt_error < -0.3:
-                # Drone is more than 0.3m above target — override vz to push down
-                vz_ned = max(vz_ned, 0.5)  # NED positive = descend
-            elif alt_error < 0:
-                # Slightly above — gentle correction, don't allow further climb
-                vz_ned = max(vz_ned, 0.0)
-
             try:
-                set_vel(vel_ned[0], vel_ned[1], vz_ned)
+                set_vel(vel_ned[0], vel_ned[1], vel_ned[2])
             except Exception:
                 pass
 
@@ -331,7 +304,7 @@ def fly_with_avoidance(waypoints, wp_offset=0):
             if len(pts) > 0:
                 min_obs = float(np.min(np.sqrt(pts[:, 0]**2 + pts[:, 1]**2 + pts[:, 2]**2)))
             print(f"  pos:({px:.2f},{py:.2f},{-pz:.2f}m) d:{dist:.2f} "
-                  f"vel:({vel_ned[0]:.2f},{vel_ned[1]:.2f},vz:{-vz_ned:.2f}) "
+                  f"vel:({vel_ned[0]:.2f},{vel_ned[1]:.2f},vz:{-vel_ned[2]:.2f}) "
                   f"obs:{len(pts)} min:{min_obs:.2f}")
 
             time.sleep(1.0 / CONTROL_HZ)
