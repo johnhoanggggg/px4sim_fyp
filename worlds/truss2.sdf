@@ -1,0 +1,554 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sdf version="1.9">
+  <world name="truss2">
+    <physics type="ode">
+      <max_step_size>0.004</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>250</real_time_update_rate>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics">
+      <engine><filename>gz-physics-dartsim-plugin</filename></engine>
+    </plugin>
+    <plugin filename="gz-sim-navsat-system" name="gz::sim::systems::NavSat"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <plugin filename="gz-sim-magnetometer-system" name="gz::sim::systems::Magnetometer"/>
+    <plugin filename="gz-sim-air-pressure-system" name="gz::sim::systems::AirPressure"/>
+
+    <gravity>0 0 -9.8</gravity>
+    <magnetic_field>6e-06 2.3e-05 -4.2e-05</magnetic_field>
+    <atmosphere type="adiabatic"/>
+    <scene>
+      <grid>false</grid>
+      <ambient>0.4 0.4 0.4 1</ambient>
+      <background>0.6 0.7 0.85 1</background>
+      <shadows>true</shadows>
+    </scene>
+
+    <!-- Ground -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>1 1</size></plane></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>500 500</size></plane></geometry>
+          <material>
+            <ambient>0.75 0.75 0.70 1</ambient>
+            <diffuse>0.75 0.75 0.70 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!--
+      MULTI-LAYER ROOF TRUSS LATTICE
+      ===============================
+      3 parallel truss planes at x = -3, 0, +3  (ENU)
+      6 bays along Y: nodes at y = 0, 2.5, 5, 7.5, 10, 12.5
+      Bottom chord z = 1.0,  Top chord z = 5.0
+      Flyable zone: z ~ 1.1 to 4.9  (3.8 m vertical clearance)
+
+      Internal cross-beams at various heights create a 3-D maze.
+      Beam depth 0.3 m so the drone must actively avoid them.
+
+      ENU -> NED:  ned_north = enu_y, ned_east = enu_x, ned_up = enu_z
+    -->
+
+    <!-- ============================================================ -->
+    <!--  COLUMNS  (vertical posts at every grid intersection)        -->
+    <!--  Grid: x={-3,0,3} x y={0,2.5,5,7.5,10,12.5}               -->
+    <!--  Each: 0.1 x 0.1 x 5.5 m, z centre = 2.75                 -->
+    <!-- ============================================================ -->
+
+    <!-- x = -3 columns -->
+    <model name="col_L_0"><static>true</static>
+      <pose>-3 0 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_L_1"><static>true</static>
+      <pose>-3 2.5 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_L_2"><static>true</static>
+      <pose>-3 5 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_L_3"><static>true</static>
+      <pose>-3 7.5 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_L_4"><static>true</static>
+      <pose>-3 10 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_L_5"><static>true</static>
+      <pose>-3 12.5 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- x = 0 columns -->
+    <model name="col_C_0"><static>true</static>
+      <pose>0 0 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_C_1"><static>true</static>
+      <pose>0 2.5 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_C_2"><static>true</static>
+      <pose>0 5 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_C_3"><static>true</static>
+      <pose>0 7.5 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_C_4"><static>true</static>
+      <pose>0 10 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_C_5"><static>true</static>
+      <pose>0 12.5 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- x = +3 columns -->
+    <model name="col_R_0"><static>true</static>
+      <pose>3 0 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_R_1"><static>true</static>
+      <pose>3 2.5 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_R_2"><static>true</static>
+      <pose>3 5 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_R_3"><static>true</static>
+      <pose>3 7.5 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_R_4"><static>true</static>
+      <pose>3 10 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="col_R_5"><static>true</static>
+      <pose>3 12.5 2.75 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 0.1 5.5</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 0.1 5.5</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!--  BOTTOM CHORD — longitudinal beams along Y at z = 1.0       -->
+    <!-- ============================================================ -->
+    <model name="bchord_long_L"><static>true</static>
+      <pose>-3 6.25 1.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.12 12.5 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.12 12.5 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="bchord_long_C"><static>true</static>
+      <pose>0 6.25 1.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.12 12.5 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.12 12.5 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="bchord_long_R"><static>true</static>
+      <pose>3 6.25 1.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.12 12.5 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.12 12.5 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!--  TOP CHORD — longitudinal beams along Y at z = 5.0          -->
+    <!-- ============================================================ -->
+    <model name="tchord_long_L"><static>true</static>
+      <pose>-3 6.25 5.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.12 12.5 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.12 12.5 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="tchord_long_C"><static>true</static>
+      <pose>0 6.25 5.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.12 12.5 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.12 12.5 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="tchord_long_R"><static>true</static>
+      <pose>3 6.25 5.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.12 12.5 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.12 12.5 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!--  BOTTOM CHORD — transverse beams along X at z = 1.0         -->
+    <!-- ============================================================ -->
+    <model name="bchord_trans_0"><static>true</static>
+      <pose>0 0 1.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>6.0 0.12 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>6.0 0.12 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="bchord_trans_1"><static>true</static>
+      <pose>0 2.5 1.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>6.0 0.12 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>6.0 0.12 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="bchord_trans_2"><static>true</static>
+      <pose>0 5 1.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>6.0 0.12 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>6.0 0.12 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="bchord_trans_3"><static>true</static>
+      <pose>0 7.5 1.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>6.0 0.12 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>6.0 0.12 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="bchord_trans_4"><static>true</static>
+      <pose>0 10 1.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>6.0 0.12 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>6.0 0.12 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="bchord_trans_5"><static>true</static>
+      <pose>0 12.5 1.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>6.0 0.12 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>6.0 0.12 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!--  TOP CHORD — transverse beams along X at z = 5.0            -->
+    <!-- ============================================================ -->
+    <model name="tchord_trans_0"><static>true</static>
+      <pose>0 0 5.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>6.0 0.12 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>6.0 0.12 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="tchord_trans_1"><static>true</static>
+      <pose>0 2.5 5.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>6.0 0.12 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>6.0 0.12 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="tchord_trans_2"><static>true</static>
+      <pose>0 5 5.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>6.0 0.12 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>6.0 0.12 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="tchord_trans_3"><static>true</static>
+      <pose>0 7.5 5.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>6.0 0.12 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>6.0 0.12 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="tchord_trans_4"><static>true</static>
+      <pose>0 10 5.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>6.0 0.12 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>6.0 0.12 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="tchord_trans_5"><static>true</static>
+      <pose>0 12.5 5.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>6.0 0.12 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>6.0 0.12 0.12</size></box></geometry>
+          <material><ambient>0.50 0.45 0.35 1</ambient><diffuse>0.50 0.45 0.35 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!--  INTERNAL CROSS-BEAMS  (the 3-D maze obstacles)             -->
+    <!--  0.3 m deep beams at various heights inside the structure   -->
+    <!--  Colour: dark steel blue to distinguish from chords         -->
+    <!-- ============================================================ -->
+
+    <!-- Bay A  (y ~ 1.25):  left bay beam at z=2.5,  right bay beam at z=3.5 -->
+    <model name="internal_A_L"><static>true</static>
+      <pose>-1.5 1.25 2.5 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>3.0 0.1 0.3</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>3.0 0.1 0.3</size></box></geometry>
+          <material><ambient>0.35 0.35 0.42 1</ambient><diffuse>0.35 0.35 0.42 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="internal_A_R"><static>true</static>
+      <pose>1.5 1.25 3.5 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>3.0 0.1 0.3</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>3.0 0.1 0.3</size></box></geometry>
+          <material><ambient>0.35 0.35 0.42 1</ambient><diffuse>0.35 0.35 0.42 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- Bay B  (y ~ 3.75):  full width at z=2.5 with 1.5 m centre gap -->
+    <model name="internal_B_L"><static>true</static>
+      <pose>-1.875 3.75 2.5 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>2.25 0.1 0.3</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>2.25 0.1 0.3</size></box></geometry>
+          <material><ambient>0.35 0.35 0.42 1</ambient><diffuse>0.35 0.35 0.42 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="internal_B_R"><static>true</static>
+      <pose>1.875 3.75 2.5 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>2.25 0.1 0.3</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>2.25 0.1 0.3</size></box></geometry>
+          <material><ambient>0.35 0.35 0.42 1</ambient><diffuse>0.35 0.35 0.42 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- Bay C  (y ~ 6.25):  left beam at z=3.5,  right beam at z=2.0 -->
+    <model name="internal_C_L"><static>true</static>
+      <pose>-1.5 6.25 3.5 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>3.0 0.1 0.3</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>3.0 0.1 0.3</size></box></geometry>
+          <material><ambient>0.35 0.35 0.42 1</ambient><diffuse>0.35 0.35 0.42 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="internal_C_R"><static>true</static>
+      <pose>1.5 6.25 2.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>3.0 0.1 0.3</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>3.0 0.1 0.3</size></box></geometry>
+          <material><ambient>0.35 0.35 0.42 1</ambient><diffuse>0.35 0.35 0.42 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- Bay D  (y ~ 8.75):  full width at z=3.0 with 1.0 m centre gap -->
+    <model name="internal_D_L"><static>true</static>
+      <pose>-1.75 8.75 3.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>2.5 0.1 0.3</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>2.5 0.1 0.3</size></box></geometry>
+          <material><ambient>0.35 0.35 0.42 1</ambient><diffuse>0.35 0.35 0.42 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="internal_D_R"><static>true</static>
+      <pose>1.75 8.75 3.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>2.5 0.1 0.3</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>2.5 0.1 0.3</size></box></geometry>
+          <material><ambient>0.35 0.35 0.42 1</ambient><diffuse>0.35 0.35 0.42 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- Bay E  (y ~ 11.25):  left beam at z=3.0,  right beam at z=2.0 -->
+    <model name="internal_E_L"><static>true</static>
+      <pose>-1.5 11.25 3.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>3.0 0.1 0.3</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>3.0 0.1 0.3</size></box></geometry>
+          <material><ambient>0.35 0.35 0.42 1</ambient><diffuse>0.35 0.35 0.42 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="internal_E_R"><static>true</static>
+      <pose>1.5 11.25 2.0 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>3.0 0.1 0.3</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>3.0 0.1 0.3</size></box></geometry>
+          <material><ambient>0.35 0.35 0.42 1</ambient><diffuse>0.35 0.35 0.42 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!--  DIAGONAL BRACES  (in truss planes for realism)             -->
+    <!--  From bottom chord (z=1.0) to top chord (z=5.0)            -->
+    <!--  dy=2.5, dz=4.0 → len=4.72 m, roll=0.559 rad              -->
+    <!-- ============================================================ -->
+    <model name="diag_L_0"><static>true</static>
+      <pose>-3 1.25 3.0 0.559 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.06 0.06 4.72</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.06 0.06 4.72</size></box></geometry>
+          <material><ambient>0.42 0.35 0.28 1</ambient><diffuse>0.42 0.35 0.28 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="diag_L_2"><static>true</static>
+      <pose>-3 6.25 3.0 0.559 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.06 0.06 4.72</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.06 0.06 4.72</size></box></geometry>
+          <material><ambient>0.42 0.35 0.28 1</ambient><diffuse>0.42 0.35 0.28 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="diag_L_4"><static>true</static>
+      <pose>-3 11.25 3.0 0.559 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.06 0.06 4.72</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.06 0.06 4.72</size></box></geometry>
+          <material><ambient>0.42 0.35 0.28 1</ambient><diffuse>0.42 0.35 0.28 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="diag_R_1"><static>true</static>
+      <pose>3 3.75 3.0 -0.559 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.06 0.06 4.72</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.06 0.06 4.72</size></box></geometry>
+          <material><ambient>0.42 0.35 0.28 1</ambient><diffuse>0.42 0.35 0.28 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="diag_R_3"><static>true</static>
+      <pose>3 8.75 3.0 -0.559 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.06 0.06 4.72</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.06 0.06 4.72</size></box></geometry>
+          <material><ambient>0.42 0.35 0.28 1</ambient><diffuse>0.42 0.35 0.28 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="diag_C_2"><static>true</static>
+      <pose>0 6.25 3.0 -0.559 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.06 0.06 4.72</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.06 0.06 4.72</size></box></geometry>
+          <material><ambient>0.42 0.35 0.28 1</ambient><diffuse>0.42 0.35 0.28 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!--  LIGHTING & COORDINATES                                     -->
+    <!-- ============================================================ -->
+    <light name="sunUTC" type="directional">
+      <pose>0 0 500 0 0 0</pose>
+      <cast_shadows>true</cast_shadows>
+      <intensity>1</intensity>
+      <direction>0.001 0.625 -0.78</direction>
+      <diffuse>0.904 0.904 0.904 1</diffuse>
+      <specular>0.271 0.271 0.271 1</specular>
+      <attenuation>
+        <range>2000</range><linear>0</linear>
+        <constant>1</constant><quadratic>0</quadratic>
+      </attenuation>
+    </light>
+
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>47.397971057728974</latitude_deg>
+      <longitude_deg>8.546163739800146</longitude_deg>
+      <elevation>0</elevation>
+    </spherical_coordinates>
+  </world>
+</sdf>

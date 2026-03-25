@@ -70,7 +70,8 @@ def run_viz(queue: mp.Queue):
     fig, ax = plt.subplots(figsize=(7, 9))
     fig.canvas.manager.set_window_title("VFH2D Top-Down View")
 
-    # Static elements — pillars
+    # Static elements — pillars (drawn once on first data if dynamic list given)
+    obstacles_drawn = {"done": False}
     for (pn, pe) in PILLAR_NED:
         circ = plt.Circle((pe, pn), PILLAR_RADIUS, color="0.45",
                           ec="0.3", lw=1, zorder=2)
@@ -114,6 +115,18 @@ def run_viz(queue: mp.Queue):
 
         if data is None:
             return []
+
+        # Replace static obstacles on first packet if dynamic list provided
+        if not obstacles_drawn["done"] and "obstacles" in data:
+            # Remove default pillar patches and draw provided ones
+            while ax.patches:
+                ax.patches[0].remove()
+            obs_r = data.get("obstacle_radius", PILLAR_RADIUS)
+            for (on, oe) in data["obstacles"]:
+                circ = plt.Circle((oe, on), obs_r, color="0.45",
+                                  ec="0.3", lw=1, zorder=2)
+                ax.add_patch(circ)
+            obstacles_drawn["done"] = True
 
         dn, de = data["drone_n"], data["drone_e"]
         yaw = data["yaw"]
