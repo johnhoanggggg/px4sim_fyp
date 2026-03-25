@@ -37,25 +37,24 @@ WAYPOINT_TOL = 0.6
 VEL_SMOOTH = 0.3         # EMA alpha for velocity smoothing
 
 # Waypoints in NED (north, east, down, label)
-# Structure in ENU: x=-3..3, y=0..12.5, z=1..5
-# NED mapping: north=enu_y, east=enu_x, down=-enu_z
 #
-# Internal beams (ENU):
-#   Bay A (y=1.25): left x<0 at z=2.5,  right x>0 at z=3.5
-#   Bay B (y=3.75): full width z=2.5 with gap x=-0.75..0.75
-#   Bay C (y=6.25): left x<0 at z=3.5,  right x>0 at z=2.0
-#   Bay D (y=8.75): full width z=3.0 with gap x=-0.5..0.5
-#   Bay E (y=11.25): left x<0 at z=3.0,  right x>0 at z=2.0
+# Structure (ENU): 7 pitched timber trusses running E-W at y=0,1.8..10.8
+#   Span x=-3.5..3.5, bottom chord z=1.5, peak z=3.5
+#   Collar ties: t0(z=2.5), t2(z=3.0), t3(z=2.5), t5(z=3.0), t6(z=2.5)
+#   Noggins: y=0.9 x=-1 z=2.3, y=4.5 x=1.5 z=2.0,
+#            y=6.3 x=-1.5 z=2.8, y=9.9 x=0.5 z=2.5
+#   NED: north=enu_y, east=enu_x, down=-enu_z
 WAYPOINTS = [
-    ( 0.0,   0.0,  -3.0,  "Takeoff"),
-    ( 1.25, -1.0,  -3.0,  "Bay A: left bay above z=2.5 beam"),
-    ( 3.75,  0.0,  -2.5,  "Bay B: centre gap at z=2.5"),
-    ( 6.25,  1.0,  -3.0,  "Bay C: right bay above z=2.0 beam"),
-    ( 8.75,  0.0,  -2.5,  "Bay D: centre gap below z=3.0"),
-    (11.25,  1.0,  -3.0,  "Bay E: right bay above z=2.0 beam"),
-    (13.0,   0.0,  -3.0,  "Exit north"),
-    ( 6.25, -1.0,  -4.0,  "Return high over structure"),
-    ( 0.0,   0.0,  -3.0,  "Home"),
+    (-0.5,   0.0,  -2.5,  "Takeoff south of structure"),
+    ( 0.9,   1.0,  -2.0,  "Bay 0-1: right side, below collar z=2.5"),
+    ( 2.7,   0.0,  -3.0,  "Bay 1-2: fly high, no collar on t1"),
+    ( 4.5,  -1.0,  -2.5,  "Bay 2-3: left, below t2 collar z=3.0"),
+    ( 6.3,   1.0,  -2.5,  "Bay 3-4: right, avoid noggin x=-1.5"),
+    ( 8.1,   0.0,  -3.2,  "Bay 4-5: high, no collar on t4"),
+    ( 9.9,  -0.5,  -2.0,  "Bay 5-6: low, below t5 collar z=3.0"),
+    (11.5,   0.0,  -2.5,  "Exit north"),
+    ( 5.4,   0.0,  -4.0,  "Return high over structure"),
+    (-0.5,   0.0,  -2.5,  "Home"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -206,11 +205,14 @@ def wait_until_reached(x, y, z, tolerance=WAYPOINT_TOL, timeout=15):
     return False
 
 
-# Column positions in NED for visualizer (ENU x→NED east, ENU y→NED north)
+# Truss member positions in NED for visualizer (king posts + web verticals)
+# ENU (x,y) → NED (north=y, east=x)
+_TRUSS_Y_VALS = (0, 1.8, 3.6, 5.4, 7.2, 9.0, 10.8)
 _COL_POSITIONS_NED = []
-for _x in (-3, 0, 3):
-    for _y in (0, 2.5, 5, 7.5, 10, 12.5):
-        _COL_POSITIONS_NED.append((_y, _x))  # (north, east)
+for _y in _TRUSS_Y_VALS:
+    _COL_POSITIONS_NED.append((_y, 0))        # king post
+    _COL_POSITIONS_NED.append((_y, -1.75))    # left web vertical
+    _COL_POSITIONS_NED.append((_y, 1.75))     # right web vertical
 
 
 def _push_viz(drone_n, drone_e, yaw, current_wp_idx):
