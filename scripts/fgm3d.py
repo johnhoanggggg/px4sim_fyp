@@ -142,11 +142,11 @@ class FGM3D:
         # 3. Find gaps via connected-component flood fill
         gaps = self._find_gaps()
 
-        # 4. No passable gap → stop
+        # 4. No passable gap → back away from nearest obstacle
         if not gaps:
             self._last_chosen_az = None
             self._last_chosen_el = None
-            return (0.0, 0.0, 0.0)
+            return self._retreat(obstacle_pts, min_obs_dist)
 
         # 5. Pick best gap and steering direction
         best_az, best_el = self._select_gap(gaps, goal_az, goal_el)
@@ -180,6 +180,16 @@ class FGM3D:
     def get_chosen_direction(self) -> float | None:
         """Return chosen azimuth for viz2d compatibility."""
         return self._last_chosen_az
+
+    def get_sphere_data(self) -> dict:
+        """Return spherical grid data for visualization."""
+        return {
+            "blocked": self._blocked.copy(),
+            "az_centres": self._az_centres.tolist(),
+            "el_centres": self._el_centres.tolist(),
+            "chosen_az": self._last_chosen_az,
+            "chosen_el": self._last_chosen_el,
+        }
 
     def reset(self):
         self._blocked[:] = False
@@ -223,18 +233,23 @@ class FGM3D:
         # Fill range map (min range per cell)
         np.minimum.at(self._range_map, (el_idx, az_idx), d_v)
 
-        # Inflate: for each obstacle, block all cells within angular radius
+        # Deduplicate: for each occupied cell, keep only the closest point
+        # This avoids redundant inflation for multiple points on the same beam
+        cell_min_dist = {}   # (ei, ai) → min distance
+        cell_min_dir = {}    # (ei, ai) → unit direction of closest point
         for i in range(len(d_v)):
-            half_ang = math.asin(min(self.bubble_radius / d_v[i], 1.0))
+            key = (int(el_idx[i]), int(az_idx[i]))
+            if key not in cell_min_dist or d_v[i] < cell_min_dist[key]:
+                cell_min_dist[key] = float(d_v[i])
+                cell_min_dir[key] = pts_v[i] / d_v[i]
 
-            # Determine which cells are within half_ang of this obstacle
-            # Use great-circle angular distance from obstacle direction to each cell
-            obs_dir = pts_v[i] / d_v[i]  # unit vector
-            # Dot product with all cell directions
+        # Inflate per occupied cell (much fewer iterations than per-point)
+        for key, dist in cell_min_dist.items():
+            half_ang = math.asin(min(self.bubble_radius / dist, 1.0))
+            obs_dir = cell_min_dir[key]
             dots = np.sum(self._cell_dirs * obs_dir, axis=-1)
             dots = np.clip(dots, -1.0, 1.0)
             ang_dist = np.arccos(dots)
-
             self._blocked |= (ang_dist <= half_ang)
 
     # ------------------------------------------------------------------
@@ -383,6 +398,27 @@ class FGM3D:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _retreat(self, pts: np.ndarray, min_obs_dist: float) -> tuple:
+        """When fully blocked, back away from the centroid of nearby obstacles."""
+        speed = self._compute_speed(min_obs_dist) * 0.5  # slow retreat
+        if len(pts) == 0:
+            return (0.0, 0.0, 0.0)
+
+        dists = np.sqrt(np.sum(pts**2, axis=1))
+        close = pts[dists < self.safe_distance * 1.5]
+        if len(close) == 0:
+            close = pts
+
+        # Centroid of threats — retreat in opposite direction
+        centroid = np.mean(close, axis=0)
+        norm = np.linalg.norm(centroid)
+        if norm < 0.01:
+            return (-speed, 0.0, 0.0)  # default: back up
+        retreat_dir = -centroid / norm
+        return (float(speed * retreat_dir[0]),
+                float(speed * retreat_dir[1]),
+                float(speed * retreat_dir[2]))
 
     def _compute_speed(self, min_obs_dist: float) -> float:
         if min_obs_dist >= self.safe_distance:

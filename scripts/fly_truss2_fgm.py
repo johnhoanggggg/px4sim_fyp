@@ -91,13 +91,13 @@ fgm = FGM3D(
     n_az=72,
     n_el=18,
     max_range=1.5,
-    bubble_radius=0.3,
+    bubble_radius=0.18,
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
     gap_weight_goal=2.0,
     gap_weight_width=0.3,
-    min_gap_cells=4,
-    edge_margin_deg=10.0,
+    min_gap_cells=2,
+    edge_margin_deg=8.0,
     el_max_deg=70.0,
 )
 
@@ -226,6 +226,7 @@ def _push_viz(drone_n, drone_e, yaw, current_wp_idx):
         "current_wp": current_wp_idx,
         "obstacles": _COL_POSITIONS_NED,
         "obstacle_radius": 0.08,
+        "sphere": fgm.get_sphere_data(),
     }
     try:
         viz_queue.put_nowait(pkt)
