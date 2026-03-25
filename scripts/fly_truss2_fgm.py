@@ -309,6 +309,17 @@ def fly_with_avoidance(waypoints, wp_offset=0):
             # Vertical: FLU vz (up+) → NED vz (down+)
             vz_ned = -vel_body[2]
 
+            # Hard height ceiling: never fly above waypoint altitude
+            # pz is NED down (negative = up), wz is target NED down
+            # If drone is above target (pz < wz), force descend
+            alt_error = pz - wz  # negative = drone is above target
+            if alt_error < -0.3:
+                # Drone is more than 0.3m above target — override vz to push down
+                vz_ned = max(vz_ned, 0.5)  # NED positive = descend
+            elif alt_error < 0:
+                # Slightly above — gentle correction, don't allow further climb
+                vz_ned = max(vz_ned, 0.0)
+
             try:
                 set_vel(vel_ned[0], vel_ned[1], vz_ned)
             except Exception:
@@ -325,9 +336,11 @@ def fly_with_avoidance(waypoints, wp_offset=0):
 
             time.sleep(1.0 / CONTROL_HZ)
 
-        # Hold at waypoint
+        # Hold at waypoint (clamp altitude — never hold above waypoint)
         use_pos_setpoints = True
-        set_target(wx, wy, wz)
+        pos = get_position()
+        hold_z = wz if not pos else max(pos[2], wz)  # max because NED down: more negative = higher
+        set_target(wx, wy, hold_z)
         _push_viz(wx, wy, yaw, wp_idx)
         print(f"  Holding 2s...")
         time.sleep(2)
