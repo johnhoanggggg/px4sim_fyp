@@ -11,6 +11,9 @@ ln -sf $REPO_DIR/worlds/truss.sdf \
 ln -sf $REPO_DIR/worlds/pillars.sdf \
   $PX4_DIR/Tools/simulation/gz/worlds/pillars.sdf
 
+ln -sf $REPO_DIR/worlds/truss2.sdf \
+  $PX4_DIR/Tools/simulation/gz/worlds/truss2.sdf
+
 ln -sf $REPO_DIR/airframes/4022_gz_x500_tof \
   $PX4_DIR/ROMFS/px4fmu_common/init.d-posix/airframes/4022_gz_x500_tof
 

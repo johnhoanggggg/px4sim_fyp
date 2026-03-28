@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-Offboard control with 2D VFH obstacle avoidance through a pillar field.
+Offboard control with Follow-the-Gap (FGM) obstacle avoidance through a
+pillar field.
 
-Launches a separate matplotlib window showing a top-down view with
-VFH2D histogram bins, drone position, and the environment.
+FGM finds actual gaps in the obstacle scan, inflates them by the drone's
+physical radius, and steers toward the point in the best gap closest to
+the goal.  This guarantees maximum clearance and eliminates pillar clipping.
 
 Usage:
     1. Start PX4 SITL:
          cd ~/PX4-Autopilot && PX4_GZ_WORLD=pillars make px4_sitl gz_x500_tof
     2. Run this script:
-         python3 fly_pillars.py
+         python3 fly_pillars_fgm.py
 """
 
 import time
@@ -22,23 +24,24 @@ import numpy as np
 from pymavlink import mavutil
 
 from tof_reader import TofReader
-from vfh2d import VFH2D
+from fgm2d import FGM2D
 from viz2d import run_viz
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MAX_SPEED = 0.4
-SAFE_DISTANCE = 1.2
+MAX_SPEED = 0.8
+SAFE_DISTANCE = 0.8
 CONTROL_HZ = 10
 WAYPOINT_TOL = 0.5
+VEL_SMOOTH = 0.3          # EMA alpha: 0=frozen, 1=instant.  0.3 ≈ 3-tick ramp
 
 # Waypoints in NED (north, east, down, label)
 WAYPOINTS = [
     (0.0,   0.0, -1.5, "Takeoff"),
     (2.0,   0.0, -1.5, "Through first gap"),
     (8.0,   1.0, -1.5, "Weave right"),
-    (11.0,  0.0, -1.5, "Far end"),
+    (12.0,  0.0, -1.5, "Far end"),
     (8.0,  -1.0, -1.5, "Weave back left"),
     (5.0,   0.0, -1.5, "Return through gap"),
     (0.0,   0.0, -1.5, "Home"),
@@ -75,14 +78,16 @@ target_lock = threading.Lock()
 # Modules
 # ---------------------------------------------------------------------------
 tof = TofReader()
-vfh = VFH2D(
-    resolution_deg=10,
-    threshold_low=0.15,
-    threshold_high=0.2,
+fgm = FGM2D(
+    n_rays=72,
+    max_range=1.5,
+    bubble_radius=0.3,
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
-    drone_radius=0.5,
-    enlarge_bins=2,
+    gap_weight_goal=2.0,
+    gap_weight_width=0.3,
+    min_gap_width_deg=10.0,
+    edge_margin_deg=10.0,
 )
 
 # Visualizer (separate process)
@@ -187,8 +192,8 @@ def wait_until_reached(x, y, z, tolerance=WAYPOINT_TOL, timeout=15):
 
 def _push_viz(drone_n, drone_e, yaw, current_wp_idx):
     """Send state to visualizer (non-blocking)."""
-    bins = vfh.get_histogram()
-    chosen = vfh.get_chosen_direction()
+    bins = fgm.get_histogram()
+    chosen = fgm.get_chosen_direction()
     wps_ne = [(w[0], w[1]) for w in WAYPOINTS]
     pkt = {
         "drone_n": drone_n,
@@ -202,17 +207,19 @@ def _push_viz(drone_n, drone_e, yaw, current_wp_idx):
     try:
         viz_queue.put_nowait(pkt)
     except Exception:
-        pass  # drop if full
+        pass
 
 
 def fly_with_avoidance(waypoints, wp_offset=0):
-    """Navigate waypoints using 2D VFH obstacle avoidance."""
+    """Navigate waypoints using FGM obstacle avoidance."""
     global use_pos_setpoints
     use_pos_setpoints = False
 
+    prev_vel_ned = (0.0, 0.0)   # for EMA smoothing across waypoints
+
     for i, (wx, wy, wz, label) in enumerate(waypoints):
         wp_idx = i + wp_offset
-        print(f"\n>>> [{wp_idx+1}/{len(WAYPOINTS)}] {label}")
+        print(f"\n>>> [{wp_idx+1}/{len(WAYPOINTS)}] {label}  (FGM)")
         t0 = time.time()
 
         while time.time() - t0 < 60:
@@ -235,16 +242,13 @@ def fly_with_avoidance(waypoints, wp_offset=0):
             goal_body = (frd_x, -frd_y)  # FRD→FLU: negate y
 
             # Obstacles
-            pts = tof.get_obstacle_points(max_range=2.0)
+            pts = tof.get_obstacle_points(max_range=1.5)
             if len(pts) > 0:
-                # Keep only points near the drone's horizontal plane.
-                # Filter out ground hits (below) and ceiling/sky (above).
-                # At 1.5m altitude, ground-bounce rays have z ≈ -1.0 to -1.5
                 pts = pts[(pts[:, 2] > -0.5) & (pts[:, 2] < 1.0)]
 
-            # VFH2D
+            # FGM
             if len(pts) > 0:
-                vel_body = vfh.update(pts, goal_body)
+                vel_body = fgm.update(pts, goal_body)
             else:
                 goal_h = math.sqrt(goal_body[0]**2 + goal_body[1]**2)
                 if goal_h > 0.01:
@@ -256,10 +260,18 @@ def fly_with_avoidance(waypoints, wp_offset=0):
             # Body FLU (vx, vy) → NED
             frd_vx = vel_body[0]
             frd_vy = -vel_body[1]  # FLU→FRD
-            vel_ned = (
+            raw_ned = (
                 c_yaw * frd_vx - s_yaw * frd_vy,
                 s_yaw * frd_vx + c_yaw * frd_vy,
             )
+
+            # EMA smoothing — prevents snap-turns at waypoint transitions
+            a = VEL_SMOOTH
+            vel_ned = (
+                a * raw_ned[0] + (1 - a) * prev_vel_ned[0],
+                a * raw_ned[1] + (1 - a) * prev_vel_ned[1],
+            )
+            prev_vel_ned = vel_ned
 
             # Hold altitude via z velocity toward target
             vz = max(-0.5, min(0.5, (wz - pz) * 1.0))
@@ -269,7 +281,6 @@ def fly_with_avoidance(waypoints, wp_offset=0):
             except Exception:
                 pass
 
-            # Push to visualizer
             _push_viz(px, py, yaw, wp_idx)
 
             min_obs = float('inf')
@@ -370,9 +381,9 @@ try:
     set_target(0, 0, -1.5)
     wait_until_reached(0, 0, -1.5, tolerance=0.3, timeout=15)
 
-    # Fly pillar field with 2D VFH
-    print("\nEnabling 2D VFH obstacle avoidance...")
-    vfh.reset()
+    # Fly pillar field with FGM
+    print(f"\nEnabling FGM obstacle avoidance (bubble={fgm.bubble_radius}m)...")
+    fgm.reset()
     fly_with_avoidance(WAYPOINTS[1:], wp_offset=1)
 
     land_and_disarm()

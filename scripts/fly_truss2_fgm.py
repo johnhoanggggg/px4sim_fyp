@@ -1,45 +1,59 @@
 #!/usr/bin/env python3
 """
-Offboard control with VFH3D obstacle avoidance.
+Offboard control with 3-D Follow-the-Gap (FGM) obstacle avoidance through
+a multi-layer roof truss lattice.
 
-Same waypoint mission as fly_truss.py, but uses velocity commands driven
-by the VFH3D algorithm to steer around obstacles detected by the 12 ToF
-sensors.
+FGM3D handles both horizontal (XY) and vertical (Z) avoidance so the drone
+can thread through gaps between beams at different heights.
 
 Usage:
-    1. Start PX4 SITL:  cd ~/PX4-Autopilot && PX4_GZ_WORLD=truss make px4_sitl gz_x500_tof
-    2. Run this script: python3 fly_avoid.py
+    1. Start PX4 SITL:
+         cd ~/PX4-Autopilot && PX4_GZ_WORLD=truss2 make px4_sitl gz_x500_tof
+    2. Run this script:
+         python3 fly_truss2_fgm.py
 """
 
 import time
 import math
 import socket
 import threading
-import sys
+import multiprocessing as mp
 
 import numpy as np
 from pymavlink import mavutil
 
 from tof_reader import TofReader
-from vfh3d import VFH3D
-from gz_markers import GzMarkerViz
+from fgm3d import FGM3D
+from viz2d import run_viz
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MAX_SPEED = 0.5          # m/s max avoidance velocity
-SAFE_DISTANCE = 1.0      # m — obstacle proximity for slowdown
-CONTROL_HZ = 10          # avoidance loop rate
-WAYPOINT_TOL = 0.4       # m — switch to next waypoint within this distance
+MAX_SPEED = 0.6          # max speed (m/s)
+SAFE_DISTANCE = 0.8
+CONTROL_HZ = 10
+WAYPOINT_TOL = 0.6
+VEL_SMOOTH = 0.3         # EMA alpha for velocity smoothing
 
-# Waypoints: (x, y, z_ned, label)
+# Waypoints in NED (north, east, down, label)
+#
+# Structure (ENU): 7 pitched timber trusses running E-W at y=5,6.8..15.8
+#   Span x=-3.5..3.5, bottom chord z=1.5, peak z=3.5
+#   Collar ties: t0(z=2.5), t2(z=3.0), t3(z=2.5), t5(z=3.0), t6(z=2.5)
+#   Drone spawns at ENU (0,0) = 5 m south of first truss.
+#   NED: north=enu_y, east=enu_x, down=-enu_z
 WAYPOINTS = [
-    (0.0,  0.0, -1.5, "Rising into truss (z=2.0m)"),
-    (0.0, -3.0, -1.5, "Flying to y=-3"),
-    (0.0, -1.0, -1.5, "Flying to y=-1"),
-    (0.0,  1.0, -1.5, "Flying to y=+1"),
-    (0.0,  3.0, -1.5, "Flying to y=+3"),
-    (0.0,  0.0, -1.5, "Returning to centre"),
+    ( 0.0,   0.0,  -1.2,  "Takeoff south of structure"),
+    ( 3.0,   0.0,  -1.2,  "Approach structure low"),
+    ( 5.9,   1.0,  -2.0,  "Bay 0-1: right side, below collar z=2.5"),
+    ( 7.7,   0.0,  -3.0,  "Bay 1-2: fly high, no collar on t1"),
+    ( 9.5,  -1.0,  -2.5,  "Bay 2-3: left, below t2 collar z=3.0"),
+    (11.3,   1.0,  -2.5,  "Bay 3-4: right, avoid noggin x=-1.5"),
+    (13.1,   0.0,  -3.2,  "Bay 4-5: high, no collar on t4"),
+    (14.9,  -0.5,  -2.0,  "Bay 5-6: low, below t5 collar z=3.0"),
+    (16.5,   0.0,  -2.5,  "Exit north"),
+    (10.4,   0.0,  -4.0,  "Return high over structure"),
+    ( 0.0,   0.0,  -1.2,  "Home"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -56,40 +70,47 @@ send = mavutil.mavlink_connection('udpout:127.0.0.1:14580',
 TARGET_SYS = recv.target_system
 TARGET_COMP = recv.target_component
 
-# Request position stream at 10Hz on the recv channel
 recv.mav.request_data_stream_send(
     TARGET_SYS, TARGET_COMP,
-    mavutil.mavlink.MAV_DATA_STREAM_POSITION,
-    10, 1)
+    mavutil.mavlink.MAV_DATA_STREAM_POSITION, 10, 1)
 time.sleep(0.5)
 
 # ---------------------------------------------------------------------------
 # Shared state
 # ---------------------------------------------------------------------------
 running = True
-use_pos_setpoints = True        # False during velocity-based avoidance
-target = [0.0, 0.0, -1.0, 0.0]  # x, y, z, yaw — shared setpoint
+use_pos_setpoints = True
+target = [0.0, 0.0, -1.0, 0.0]
 target_lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
-# Sensor + avoidance modules
+# Modules
 # ---------------------------------------------------------------------------
 tof = TofReader()
-vfh = VFH3D(
-    resolution_deg=10,
-    threshold_low=0.2,
-    threshold_high=0.4,
+fgm = FGM3D(
+    n_az=72,
+    n_el=18,
+    max_range=1.5,
+    bubble_radius=0.18,
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
+    gap_weight_goal=2.0,
+    gap_weight_width=0.3,
+    min_gap_cells=2,
+    edge_margin_deg=8.0,
+    el_max_deg=70.0,
 )
-viz = GzMarkerViz()
+
+# Visualizer (separate process) — reuses the 2-D top-down view
+viz_queue: mp.Queue = mp.Queue(maxsize=5)
+viz_proc = mp.Process(target=run_viz, args=(viz_queue,), daemon=True)
+viz_proc.start()
 
 # ---------------------------------------------------------------------------
 # MAVLink helpers
 # ---------------------------------------------------------------------------
 
 def set_pos(x, y, z, yaw=0):
-    """Send position setpoint in NED frame."""
     send.mav.set_position_target_local_ned_send(
         0, TARGET_SYS, TARGET_COMP,
         mavutil.mavlink.MAV_FRAME_LOCAL_NED,
@@ -98,59 +119,43 @@ def set_pos(x, y, z, yaw=0):
 
 
 def set_vel(vx, vy, vz, yaw=0.0):
-    """Send velocity setpoint in NED frame."""
-    # ignore position (0-2), USE velocity (3-5), ignore accel (6-8),
-    # no force (9), USE yaw (10), ignore yaw_rate (11)
     type_mask = 0b0000_1001_1100_0111
     send.mav.set_position_target_local_ned_send(
         0, TARGET_SYS, TARGET_COMP,
         mavutil.mavlink.MAV_FRAME_LOCAL_NED,
         type_mask,
-        0, 0, 0,
-        vx, vy, vz,
-        0, 0, 0,
-        yaw, 0)
+        0, 0, 0, vx, vy, vz, 0, 0, 0, yaw, 0)
 
 
 _latest_yaw = 0.0
 
 
+def get_pos_and_yaw():
+    global _latest_yaw
+    pos = None
+    while True:
+        msg = recv.recv_match(
+            type=['LOCAL_POSITION_NED', 'ATTITUDE'],
+            blocking=(pos is None), timeout=1)
+        if msg is None:
+            break
+        if msg.get_type() == 'LOCAL_POSITION_NED':
+            pos = (msg.x, msg.y, msg.z)
+        elif msg.get_type() == 'ATTITUDE':
+            _latest_yaw = msg.yaw
+    return pos, _latest_yaw
+
+
 def get_position():
-    """Read position only (convenience wrapper)."""
     pos, _ = get_pos_and_yaw()
     return pos
 
 
-def get_pos_and_yaw():
-    """Read latest position and yaw from PX4 (main thread only).
-
-    Drains all pending messages so ATTITUDE updates aren't lost while
-    blocking for LOCAL_POSITION_NED.
-    """
-    global _latest_yaw
-    pos = None
-    # Drain all available messages, caching the latest of each type
-    while True:
-        msg = recv.recv_match(
-            type=['LOCAL_POSITION_NED', 'ATTITUDE'],
-            blocking=(pos is None),  # block only if we haven't got position yet
-            timeout=1,
-        )
-        if msg is None:
-            break
-        mtype = msg.get_type()
-        if mtype == 'LOCAL_POSITION_NED':
-            pos = (msg.x, msg.y, msg.z)
-        elif mtype == 'ATTITUDE':
-            _latest_yaw = msg.yaw
-    return pos, _latest_yaw
-
 # ---------------------------------------------------------------------------
-# Background threads — only use 'send', never 'recv'
+# Background threads
 # ---------------------------------------------------------------------------
 
 def setpoint_loop():
-    """Stream position setpoints at 20Hz when use_pos_setpoints is True."""
     while running:
         if use_pos_setpoints:
             with target_lock:
@@ -163,31 +168,26 @@ def setpoint_loop():
 
 
 def heartbeat_loop():
-    """Send GCS heartbeat at 2 Hz."""
     while running:
         try:
             send.mav.heartbeat_send(
                 mavutil.mavlink.MAV_TYPE_GCS,
-                mavutil.mavlink.MAV_AUTOPILOT_INVALID,
-                0, 0, 0)
+                mavutil.mavlink.MAV_AUTOPILOT_INVALID, 0, 0, 0)
         except Exception:
             pass
         time.sleep(0.5)
 
+
 # ---------------------------------------------------------------------------
-# Flight control helpers
+# Flight helpers
 # ---------------------------------------------------------------------------
 
 def set_target(x, y, z, yaw=0):
     with target_lock:
-        target[0] = x
-        target[1] = y
-        target[2] = z
-        target[3] = yaw
+        target[0] = x; target[1] = y; target[2] = z; target[3] = yaw
 
 
 def wait_until_reached(x, y, z, tolerance=WAYPOINT_TOL, timeout=15):
-    """Block until position is within tolerance. Reads recv on main thread."""
     t0 = time.time()
     while time.time() - t0 < timeout:
         pos = get_position()
@@ -201,99 +201,129 @@ def wait_until_reached(x, y, z, tolerance=WAYPOINT_TOL, timeout=15):
     return False
 
 
-def fly_with_avoidance(waypoints):
-    """
-    Navigate waypoints using VFH3D obstacle avoidance.
+# Truss member positions in NED for visualizer (king posts + web verticals)
+# ENU (x,y) → NED (north=y, east=x)
+_TRUSS_Y_VALS = (5.0, 6.8, 8.6, 10.4, 12.2, 14.0, 15.8)
+_COL_POSITIONS_NED = []
+for _y in _TRUSS_Y_VALS:
+    _COL_POSITIONS_NED.append((_y, 0))        # king post
+    _COL_POSITIONS_NED.append((_y, -1.75))    # left web vertical
+    _COL_POSITIONS_NED.append((_y, 1.75))     # right web vertical
 
-    Runs on the main thread. Reads position from recv, reads ToF from
-    tof_reader, computes VFH3D velocity, and overrides the setpoint.
-    """
+
+def _push_viz(drone_n, drone_e, yaw, current_wp_idx):
+    """Send state to visualizer (non-blocking)."""
+    bins = fgm.get_histogram()
+    chosen = fgm.get_chosen_direction()
+    wps_ne = [(w[0], w[1]) for w in WAYPOINTS]
+    pkt = {
+        "drone_n": drone_n,
+        "drone_e": drone_e,
+        "yaw": yaw,
+        "bins": bins,
+        "chosen": chosen,
+        "waypoints": wps_ne,
+        "current_wp": current_wp_idx,
+        "obstacles": _COL_POSITIONS_NED,
+        "obstacle_radius": 0.08,
+        "sphere": fgm.get_sphere_data(),
+    }
+    try:
+        viz_queue.put_nowait(pkt)
+    except Exception:
+        pass
+
+
+def fly_with_avoidance(waypoints, wp_offset=0):
+    """Navigate waypoints using 3-D FGM obstacle avoidance."""
     global use_pos_setpoints
-    use_pos_setpoints = False  # stop position setpoints, we send velocity
+    use_pos_setpoints = False
+
+    prev_vel_ned = (0.0, 0.0, 0.0)   # for EMA smoothing (vx, vy, vz)
+
     for i, (wx, wy, wz, label) in enumerate(waypoints):
-        print(f"\n>>> [{i+1}/{len(waypoints)}] {label}")
+        wp_idx = i + wp_offset
+        print(f"\n>>> [{wp_idx+1}/{len(WAYPOINTS)}] {label}  (FGM3D)")
         t0 = time.time()
 
-        while time.time() - t0 < 30:
-            # Read position + yaw (drains all pending messages)
+        while time.time() - t0 < 60:
             pos, yaw = get_pos_and_yaw()
             if not pos:
                 continue
             px, py, pz = pos
 
-            # Check if waypoint reached
             dist = math.sqrt((px - wx)**2 + (py - wy)**2 + (pz - wz)**2)
             if dist < WAYPOINT_TOL:
                 print(f"  Reached! dist={dist:.2f}")
                 break
+
             c_yaw, s_yaw = math.cos(yaw), math.sin(yaw)
 
-            # Goal direction in NED → rotate to body FRD → convert to FLU
+            # Goal NED → body FLU
             goal_ned = (wx - px, wy - py, wz - pz)
-            # NED to body FRD (inverse yaw rotation)
             frd_x =  c_yaw * goal_ned[0] + s_yaw * goal_ned[1]
             frd_y = -s_yaw * goal_ned[0] + c_yaw * goal_ned[1]
-            frd_z = goal_ned[2]
-            # FRD to FLU: (x, -y, -z)
-            goal_body = (frd_x, -frd_y, -frd_z)
+            goal_body = (frd_x, -frd_y, -goal_ned[2])  # FRD→FLU: negate y; NED_down→FLU_up: negate z
 
-            # Get obstacle points (already in body FLU frame)
-            pts = tof.get_obstacle_points(max_range=2.0)  # matches model SDF max range
+            # Obstacles
+            pts = tof.get_obstacle_points(max_range=2.0)
 
-            # Filter out ground detections (body Z < -1.0m)
-            if len(pts) > 0:
-                pts = pts[pts[:, 2] > -1.0]
+            # FGM3D — handles both obstacle and no-obstacle cases
+            vel_body = fgm.update(pts, goal_body)
 
-            # Compute velocity in body frame
-            if len(pts) > 0:
-                vel_body = vfh.update(pts, goal_body)
-                # Visualize VFH3D bins after update (so histogram is current)
-                viz.update(vfh.get_blocked_bins(), (px, py, pz), yaw)
-            else:
-                goal_dist = math.sqrt(goal_ned[0]**2 + goal_ned[1]**2 + goal_ned[2]**2)
-                if goal_dist > 0.01:
-                    scale = min(MAX_SPEED, goal_dist) / goal_dist
-                    vel_body = (goal_body[0] * scale, goal_body[1] * scale, goal_body[2] * scale)
-                else:
-                    vel_body = (0.0, 0.0, 0.0)
+            # Body FLU → NED
+            frd_vx = vel_body[0]
+            frd_vy = -vel_body[1]  # FLU→FRD
+            raw_vn = c_yaw * frd_vx - s_yaw * frd_vy
+            raw_ve = s_yaw * frd_vx + c_yaw * frd_vy
+            raw_vd = -vel_body[2]  # FLU up → NED down
 
-            # Convert velocity: body FLU → FRD → rotate by yaw → NED
-            frd_x_out = vel_body[0]
-            frd_y_out = -vel_body[1]   # FLU to FRD
-            frd_z_out = -vel_body[2]
-            vel = (
-                c_yaw * frd_x_out - s_yaw * frd_y_out,  # NED x
-                s_yaw * frd_x_out + c_yaw * frd_y_out,  # NED y
-                frd_z_out,                                # NED z
+            # Hard height ceiling: don't climb above waypoint altitude
+            alt_error = pz - wz  # negative = drone above target
+            if alt_error < -0.3:
+                raw_vd = max(raw_vd, 0.5)
+            elif alt_error < 0:
+                raw_vd = max(raw_vd, 0.0)
+
+            # EMA smoothing (all axes)
+            a = VEL_SMOOTH
+            vel_ned = (
+                a * raw_vn + (1 - a) * prev_vel_ned[0],
+                a * raw_ve + (1 - a) * prev_vel_ned[1],
+                a * raw_vd + (1 - a) * prev_vel_ned[2],
             )
+            prev_vel_ned = vel_ned
 
-            # Send velocity command in NED
             try:
-                set_vel(vel[0], vel[1], vel[2])
+                set_vel(vel_ned[0], vel_ned[1], vel_ned[2])
             except Exception:
                 pass
 
+            _push_viz(px, py, yaw, wp_idx)
+
             min_obs = float('inf')
             if len(pts) > 0:
-                dists_obs = np.sqrt(pts[:, 0]**2 + pts[:, 1]**2 + pts[:, 2]**2)
-                min_obs = float(np.min(dists_obs))
-            print(f"  pos: ({px:.2f},{py:.2f},{-pz:.2f}m up) dist:{dist:.2f} yaw:{math.degrees(yaw):.0f}° "
-                  f"vel: ({vel[0]:.2f},{vel[1]:.2f},{vel[2]:.2f}) obs:{len(pts)} "
-                  f"min_obs:{min_obs:.2f}")
+                min_obs = float(np.min(np.sqrt(pts[:, 0]**2 + pts[:, 1]**2 + pts[:, 2]**2)))
+            print(f"  pos:({px:.2f},{py:.2f},{-pz:.2f}m) d:{dist:.2f} "
+                  f"vel:({vel_ned[0]:.2f},{vel_ned[1]:.2f},vz:{-vel_ned[2]:.2f}) "
+                  f"obs:{len(pts)} min:{min_obs:.2f}")
+
             time.sleep(1.0 / CONTROL_HZ)
 
-        # Brief hold at waypoint using position control
+        # Hold at waypoint (clamp altitude — never hold above waypoint)
         use_pos_setpoints = True
-        set_target(wx, wy, wz)
-        print(f"  Holding for 2s...")
+        pos = get_position()
+        hold_z = wz if not pos else max(pos[2], wz)  # max because NED down: more negative = higher
+        set_target(wx, wy, hold_z)
+        _push_viz(wx, wy, yaw, wp_idx)
+        print(f"  Holding 2s...")
         time.sleep(2)
-        use_pos_setpoints = False  # resume velocity for next waypoint
+        use_pos_setpoints = False
 
-    use_pos_setpoints = True  # re-enable for landing
+    use_pos_setpoints = True
 
 
 def land_and_disarm():
-    """Land, wait for touchdown, disarm."""
     print("\n>>> Landing...")
     send.mav.command_long_send(
         TARGET_SYS, TARGET_COMP,
@@ -328,19 +358,18 @@ def shutdown():
             conn.port.close()
         except Exception:
             pass
+    viz_proc.terminate()
     print("Connections closed.")
 
 
 # ---------------------------------------------------------------------------
-# Main — all recv access stays on this thread
+# Main
 # ---------------------------------------------------------------------------
 try:
-    # Start background threads (only use 'send', never 'recv')
     for fn in (setpoint_loop, heartbeat_loop):
         t = threading.Thread(target=fn, daemon=True)
         t.start()
 
-    # Wait for sensor data
     print("Waiting for ToF sensor data (up to 5s)...")
     t0 = time.time()
     while not tof.has_data() and time.time() - t0 < 5:
@@ -350,11 +379,9 @@ try:
     else:
         print("No ToF data yet — proceeding anyway")
 
-    # Stream setpoints (background thread already running)
     print("Streaming setpoints for 4s...")
     time.sleep(4)
 
-    # Set OFFBOARD mode
     print("Setting OFFBOARD mode...")
     send.mav.set_mode_send(
         TARGET_SYS,
@@ -362,7 +389,6 @@ try:
         6 << 16)
     time.sleep(1)
 
-    # Arm
     print("Arming...")
     send.mav.command_long_send(
         TARGET_SYS, TARGET_COMP,
@@ -370,17 +396,16 @@ try:
         0, 1, 21196, 0, 0, 0, 0, 0)
     time.sleep(2)
 
-    # --- Takeoff using position control ---
-    print("\n>>> Takeoff to truss altitude...")
-    set_target(0, 0, -1.5)
-    wait_until_reached(0, 0, -1.5, tolerance=0.3, timeout=15)
+    # Takeoff
+    print("\n>>> Takeoff...")
+    set_target(0, 0, -1.2)
+    wait_until_reached(0, 0, -1.2, tolerance=0.4, timeout=15)
 
-    # --- Fly waypoints with VFH3D avoidance ---
-    print("\nEnabling VFH3D obstacle avoidance...")
-    vfh.reset()
-    fly_with_avoidance(WAYPOINTS[1:])  # skip takeoff waypoint
+    # Fly through truss lattice with 3-D FGM
+    print(f"\nEnabling 3-D FGM obstacle avoidance (bubble={fgm.bubble_radius}m)...")
+    fgm.reset()
+    fly_with_avoidance(WAYPOINTS[1:], wp_offset=1)
 
-    # --- Land ---
     land_and_disarm()
 
 except KeyboardInterrupt:
