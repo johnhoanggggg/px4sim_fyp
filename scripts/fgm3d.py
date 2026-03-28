@@ -177,6 +177,10 @@ class FGM3D:
         self._last_chosen_az: float | None = None
         self._last_chosen_el: float | None = None
 
+        # Stuck detection
+        self._stuck_counter = 0
+        self._prev_goal_dist = float('inf')
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -211,24 +215,39 @@ class FGM3D:
             if np.any(valid):
                 min_obs_dist = float(np.min(dists[valid]))
 
-        # 3. Find gaps via connected-component flood fill
+        # 3. Stuck detection: if not making progress toward goal, retreat
+        if goal_dist < self._prev_goal_dist - 0.05:
+            self._stuck_counter = 0
+        else:
+            self._stuck_counter += 1
+        self._prev_goal_dist = goal_dist
+
+        # Force retreat if stuck too long or inside bubble radius
+        if self._stuck_counter > 20 or min_obs_dist < self._bubble_radius:
+            self._last_chosen_az = None
+            self._last_chosen_el = None
+            if self._stuck_counter > 20:
+                self._stuck_counter = 0
+            return self._retreat(obstacle_pts, min_obs_dist)
+
+        # 4. Find gaps via connected-component flood fill
         gaps = self._find_gaps()
 
-        # 4. No passable gap → back away from nearest obstacle
+        # 5. No passable gap → back away from nearest obstacle
         if not gaps:
             self._last_chosen_az = None
             self._last_chosen_el = None
             return self._retreat(obstacle_pts, min_obs_dist)
 
-        # 5. Pick best gap and steering direction
+        # 6. Pick best gap and steering direction
         best_az, best_el = self._select_gap(gaps, goal_az, goal_el)
         self._last_chosen_az = best_az
         self._last_chosen_el = best_el
 
-        # 6. Compute speed (slow near obstacles)
+        # 7. Compute speed (slow near obstacles)
         speed = self._compute_speed(min_obs_dist)
 
-        # 7. Convert spherical steering direction to Cartesian velocity
+        # 8. Convert spherical steering direction to Cartesian velocity
         cos_el = math.cos(best_el)
         vx = speed * cos_el * math.cos(best_az)
         vy = speed * cos_el * math.sin(best_az)
@@ -271,6 +290,8 @@ class FGM3D:
         self._range_map[:] = self.max_range
         self._last_chosen_az = None
         self._last_chosen_el = None
+        self._stuck_counter = 0
+        self._prev_goal_dist = float('inf')
 
     @property
     def bubble_radius(self):
@@ -415,7 +436,7 @@ class FGM3D:
         Pick the best gap and return (az, el) steering direction.
 
         For each gap, find the free cell closest to the goal direction.
-        Score gaps by angular proximity to goal + size bonus.
+        Score gaps by angular proximity to goal + size bonus + clearance.
         """
         best_score = float('inf')
         best_az = goal_az
@@ -430,8 +451,9 @@ class FGM3D:
         for cells in gaps:
             gap_size = len(cells)
 
-            # Find cell in this gap closest to goal direction
-            min_ang = float('inf')
+            # Find cell in this gap closest to goal direction,
+            # but penalise cells near obstacles (low range_map)
+            best_cell_score = float('inf')
             steer_az, steer_el = goal_az, goal_el
 
             for ei, ai in cells:
@@ -439,7 +461,12 @@ class FGM3D:
                 dot = float(np.dot(cell_dir, goal_dir))
                 dot = max(-1.0, min(1.0, dot))
                 ang = math.acos(dot)
-                if ang < min_ang:
+                # Clearance penalty: prefer cells far from obstacles
+                clearance = self._range_map[ei, ai]
+                clearance_penalty = self.max_range / max(clearance, 0.1)
+                cell_score = ang + 0.3 * clearance_penalty
+                if cell_score < best_cell_score:
+                    best_cell_score = cell_score
                     min_ang = ang
                     steer_az = self._az_centres[ai]
                     steer_el = self._el_centres[ei]
@@ -537,7 +564,7 @@ class FGM3D:
     def _compute_speed(self, min_obs_dist: float) -> float:
         if min_obs_dist >= self.safe_distance:
             return self.max_speed
-        ratio = max(min_obs_dist / self.safe_distance, 0.15)
+        ratio = max(min_obs_dist / self.safe_distance, 0.1)
         return self.max_speed * ratio
 
 
