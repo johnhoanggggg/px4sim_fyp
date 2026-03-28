@@ -29,8 +29,8 @@ from viz2d import run_viz
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MAX_SPEED = 0.6          # max speed (m/s)
-SAFE_DISTANCE = 0.8
+MAX_SPEED = 0.5          # max speed (m/s)
+SAFE_DISTANCE = 1.0
 CONTROL_HZ = 10
 WAYPOINT_TOL = 0.6
 VEL_SMOOTH = 0.3         # EMA alpha for velocity smoothing
@@ -90,14 +90,14 @@ tof = TofReader()
 fgm = FGM3D(
     n_az=72,
     n_el=18,
-    max_range=1.5,
-    bubble_radius=0.18,
+    max_range=2.0,
+    bubble_radius=0.35,
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
     gap_weight_goal=2.0,
     gap_weight_width=0.3,
     min_gap_cells=2,
-    edge_margin_deg=8.0,
+    edge_margin_deg=12.0,
     el_max_deg=70.0,
 )
 
