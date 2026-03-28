@@ -106,16 +106,23 @@ def run_viz(queue: mp.Queue):
     ax_sphere.set_ylabel("Elevation (deg)")
     ax_sphere.set_title("Spherical Blocked Grid (body FLU)")
 
-    # Initialize with a blank image; will be replaced on first data
+    # Initialize with a blank RGBA image; will be replaced on first data
+    # Black = blind spot (no sensor coverage)
+    # Green→Yellow→Red = covered, far→close obstacle
     sphere_img = ax_sphere.imshow(
-        np.zeros((18, 72)),
-        cmap="RdYlGn_r",
-        vmin=0, vmax=1,
+        np.zeros((18, 72, 4)),  # RGBA
         aspect="auto",
         origin="lower",
         extent=[-180, 180, -70, 70],
         interpolation="nearest",
     )
+    # Colorbar: use a scalar mappable for the legend
+    import matplotlib.cm as cm
+    import matplotlib.colors as mcolors
+    sm = cm.ScalarMappable(cmap="RdYlGn_r", norm=mcolors.Normalize(0, 1))
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=ax_sphere, shrink=0.7, pad=0.02)
+    cbar.set_label("Closeness (1 = touching, 0 = clear, black = blind)")
     # Crosshair for chosen direction
     chosen_dot, = ax_sphere.plot([], [], "x", color="blue", ms=14, mew=3, zorder=10)
     # Goal direction marker
@@ -201,11 +208,24 @@ def run_viz(queue: mp.Queue):
         # --- Spherical grid panel ---
         sphere = data.get("sphere")
         if sphere is not None:
-            blocked_grid = np.array(sphere["blocked"], dtype=float)
+            range_map = np.array(sphere["range_map"])
+            max_range = sphere["max_range"]
+            coverage = np.array(sphere["coverage"], dtype=bool)
             az_deg = np.array(sphere["az_centres"]) * 180 / math.pi
             el_deg = np.array(sphere["el_centres"]) * 180 / math.pi
 
-            sphere_img.set_data(blocked_grid)
+            # Closeness: 1 = touching, 0 = far/free
+            closeness = 1.0 - np.clip(range_map / max_range, 0, 1)
+
+            # Build RGBA image (vectorized)
+            # Covered cells: RdYlGn_r colormap (green=far, red=close)
+            # Uncovered cells: black (blind spot)
+            cmap = plt.cm.RdYlGn_r
+            rgba = cmap(closeness)        # (n_el, n_az, 4) all cells colored
+            blind = ~coverage
+            rgba[blind] = [0.0, 0.0, 0.0, 1.0]  # overwrite blind spots
+
+            sphere_img.set_data(rgba)
             sphere_img.set_extent([az_deg[0] - 2.5, az_deg[-1] + 2.5,
                                    el_deg[0] - 4, el_deg[-1] + 4])
 
@@ -250,10 +270,15 @@ if __name__ == "__main__":
         el_c = [(-math.radians(70) + (i + 0.5) * 2 * math.radians(70) / n_el) for i in range(n_el)]
         while True:
             bins = [(math.radians(a - 180 + 5), a % 70 < 20) for a in range(0, 360, 10)]
-            # Fake blocked grid — beam across forward direction
-            blocked = np.zeros((n_el, n_az), dtype=bool)
-            blocked[n_el//2-1:n_el//2+2, n_az//4:3*n_az//4] = True  # horizontal beam
-            blocked[3:n_el-3, n_az//2-2:n_az//2+2] = True  # vertical post
+            # Fake range map — beam across forward direction
+            range_map = np.full((n_el, n_az), 3.0)
+            range_map[n_el//2-1:n_el//2+2, n_az//4:3*n_az//4] = 0.6  # horizontal beam
+            range_map[3:n_el-3, n_az//2-2:n_az//2+2] = 1.0  # vertical post
+            blocked = range_map < 2.9
+            # Fake coverage — blind spots at high/low elevation bands
+            coverage = np.ones((n_el, n_az), dtype=bool)
+            coverage[0:3, :] = False    # below -45 deg
+            coverage[-3:, :] = False    # above +45 deg
             q.put({
                 "drone_n": 2 + t * 0.3,
                 "drone_e": math.sin(t * 0.5) * 1.5,
@@ -264,6 +289,9 @@ if __name__ == "__main__":
                 "current_wp": min(int(t / 3), len(wps) - 1),
                 "sphere": {
                     "blocked": blocked.tolist(),
+                    "coverage": coverage.tolist(),
+                    "range_map": range_map.tolist(),
+                    "max_range": 3.0,
                     "az_centres": az_c,
                     "el_centres": el_c,
                     "chosen_az": 0.1,

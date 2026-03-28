@@ -21,6 +21,69 @@ Sphere discretisation:
 import math
 import numpy as np
 
+# -----------------------------------------------------------------------
+# Sensor geometry (matches x500_tof model.sdf / tof_reader.py)
+# -----------------------------------------------------------------------
+_FOV_HALF = 0.3927  # ±22.5 deg per sensor axis
+_H_SAMPLES = 8
+_V_SAMPLES = 8
+
+# 10 horizontal sensors at 36° intervals
+_HORIZONTAL_YAWS = [
+    0.0, 0.6283, 1.2566, 1.8850, 2.5133,
+    3.1416, -2.5133, -1.8850, -1.2566, -0.6283,
+]
+# 2 vertical sensors
+_VERTICAL_PITCHES = [-math.pi / 2, math.pi / 2]  # up, down
+
+
+def _build_coverage_mask(az_centres, el_centres, az_res, el_res, n_az, n_el):
+    """Compute a boolean mask of which (el, az) cells are covered by sensors.
+
+    Traces all 64 rays for each of the 12 sensors into body-frame
+    directions, converts to (az, el), and marks the corresponding grid
+    cell as covered.
+    """
+    coverage = np.zeros((n_el, n_az), dtype=bool)
+    h_angles = np.linspace(-_FOV_HALF, _FOV_HALF, _H_SAMPLES)
+    v_angles = np.linspace(-_FOV_HALF, _FOV_HALF, _V_SAMPLES)
+    el_max = el_centres[-1] + el_res / 2  # upper bound of grid
+
+    def _rotz(yaw):
+        c, s = math.cos(yaw), math.sin(yaw)
+        return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+
+    def _roty(pitch):
+        c, s = math.cos(pitch), math.sin(pitch)
+        return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+
+    # Build ray directions in sensor-local frame (same grid as tof_reader)
+    local_dirs = []
+    for va in v_angles:
+        for ha in h_angles:
+            dx = math.cos(va) * math.cos(ha)
+            dy = math.cos(va) * math.sin(ha)
+            dz = math.sin(va)
+            local_dirs.append([dx, dy, dz])
+    local_dirs = np.array(local_dirs)  # (64, 3)
+
+    def _mark(rot):
+        body_dirs = (rot @ local_dirs.T).T  # (64, 3)
+        az = np.arctan2(body_dirs[:, 1], body_dirs[:, 0])
+        el = np.arctan2(body_dirs[:, 2],
+                        np.sqrt(body_dirs[:, 0]**2 + body_dirs[:, 1]**2))
+        ai = ((az + math.pi) / az_res).astype(int) % n_az
+        ei = ((el + el_max) / el_res).astype(int)
+        ei = np.clip(ei, 0, n_el - 1)
+        coverage[ei, ai] = True
+
+    for yaw in _HORIZONTAL_YAWS:
+        _mark(_rotz(yaw))
+    for pitch in _VERTICAL_PITCHES:
+        _mark(_roty(pitch))
+
+    return coverage
+
 
 class FGM3D:
     """
@@ -46,6 +109,9 @@ class FGM3D:
         Bonus for larger gap regions.
     min_gap_cells : int
         Minimum number of contiguous free cells to count as a gap.
+    min_gap_metres : float
+        Minimum physical gap width (m).  Gaps whose angular span at
+        the local obstacle range is narrower than this get rejected.
     edge_margin_deg : float
         Pull steering point inward from gap boundary (deg).
     el_max_deg : float
@@ -63,6 +129,7 @@ class FGM3D:
         gap_weight_goal: float = 2.0,
         gap_weight_width: float = 0.3,
         min_gap_cells: int = 4,
+        min_gap_metres: float = 0.5,
         edge_margin_deg: float = 8.0,
         el_max_deg: float = 70.0,
     ):
@@ -75,6 +142,7 @@ class FGM3D:
         self.gap_weight_goal = gap_weight_goal
         self.gap_weight_width = gap_weight_width
         self.min_gap_cells = min_gap_cells
+        self.min_gap_metres = min_gap_metres
         self.edge_margin = math.radians(edge_margin_deg)
         self.el_max = math.radians(el_max_deg)
 
@@ -98,6 +166,12 @@ class FGM3D:
             cos_el * np.sin(az_grid),   # Y (left)
             np.sin(el_grid),            # Z (up)
         ], axis=-1)
+
+        # Sensor coverage mask — True where at least one sensor ray falls
+        self._coverage = _build_coverage_mask(
+            self._az_centres, self._el_centres,
+            self._az_res, self._el_res, n_az, n_el,
+        )
 
         # State
         self._blocked = np.zeros((n_el, n_az), dtype=bool)
@@ -184,7 +258,10 @@ class FGM3D:
     def get_sphere_data(self) -> dict:
         """Return spherical grid data for visualization."""
         return {
-            "blocked": self._blocked.copy(),
+            "blocked": self._blocked.tolist(),
+            "coverage": self._coverage.tolist(),
+            "range_map": self._range_map.tolist(),
+            "max_range": self.max_range,
             "az_centres": self._az_centres.tolist(),
             "el_centres": self._el_centres.tolist(),
             "chosen_az": self._last_chosen_az,
@@ -192,7 +269,7 @@ class FGM3D:
         }
 
     def reset(self):
-        self._blocked[:] = False
+        self._blocked = ~self._coverage.copy()
         self._range_map[:] = self.max_range
         self._last_chosen_az = None
         self._last_chosen_el = None
@@ -207,7 +284,8 @@ class FGM3D:
 
     def _build_map(self, pts: np.ndarray):
         """Project obstacle points onto the spherical grid and inflate."""
-        self._blocked[:] = False
+        # Start with uncovered cells blocked (can't fly where you can't see)
+        self._blocked = ~self._coverage.copy()
         self._range_map[:] = self.max_range
 
         if len(pts) == 0:
@@ -260,9 +338,9 @@ class FGM3D:
         """
         Find connected free regions on the spherical blocked grid.
 
-        Returns list of gaps, each: (cell_indices, size)
-        where cell_indices is a list of (el_idx, az_idx) tuples.
-        Only gaps with >= min_gap_cells are returned.
+        Returns list of gaps, each a list of (el_idx, az_idx) tuples.
+        Gaps are filtered by both minimum cell count and minimum
+        physical width (angular span × range to nearby obstacles).
         """
         free = ~self._blocked
         if not np.any(free):
@@ -281,20 +359,58 @@ class FGM3D:
                     while stack:
                         ce, ca = stack.pop()
                         cells.append((ce, ca))
-                        # 4-connected neighbours (azimuth wraps, elevation doesn't)
                         for de, da in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                             ne = ce + de
-                            na = (ca + da) % self.n_az  # azimuth wraps
+                            na = (ca + da) % self.n_az
                             if ne < 0 or ne >= self.n_el:
                                 continue
                             if free[ne, na] and not visited[ne, na]:
                                 visited[ne, na] = True
                                 stack.append((ne, na))
 
-                    if len(cells) >= self.min_gap_cells:
-                        gaps.append(cells)
+                    if len(cells) < self.min_gap_cells:
+                        continue
+
+                    # Check physical width: estimate gap span in metres
+                    if not self._gap_wide_enough(cells):
+                        continue
+
+                    gaps.append(cells)
 
         return gaps
+
+    def _gap_wide_enough(self, cells) -> bool:
+        """Check if gap is physically wide enough for the drone to fly through.
+
+        Computes the angular span of the gap (bounding box on the grid)
+        and multiplies by the range to the nearest obstacle boundary to
+        get an approximate physical width in metres.
+        """
+        ei_vals = [c[0] for c in cells]
+        ai_vals = [c[1] for c in cells]
+
+        # Angular span in azimuth and elevation
+        az_span = (max(ai_vals) - min(ai_vals) + 1) * self._az_res
+        el_span = (max(ei_vals) - min(ei_vals) + 1) * self._el_res
+
+        # Find the range to the nearest blocked cell bordering this gap
+        # (tells us how far away the gap walls are)
+        cell_set = set(cells)
+        min_border_range = self.max_range
+        for ce, ca in cells:
+            for de, da in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                ne = ce + de
+                na = (ca + da) % self.n_az
+                if ne < 0 or ne >= self.n_el:
+                    continue
+                if (ne, na) not in cell_set and self._blocked[ne, na]:
+                    r = self._range_map[ne, na]
+                    if r < min_border_range:
+                        min_border_range = r
+
+        # Physical width ≈ angular_span × range
+        phys_w = min(az_span, el_span) * min_border_range
+        return phys_w >= self.min_gap_metres
 
     def _select_gap(self, gaps, goal_az: float, goal_el: float) -> tuple:
         """
