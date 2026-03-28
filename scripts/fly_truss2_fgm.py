@@ -23,7 +23,7 @@ import numpy as np
 from pymavlink import mavutil
 
 from tof_reader import TofReader
-from fgm3d import FGM3D
+from dwa3d import DWA3D
 from viz2d import run_viz
 
 # ---------------------------------------------------------------------------
@@ -87,17 +87,17 @@ target_lock = threading.Lock()
 # Modules
 # ---------------------------------------------------------------------------
 tof = TofReader()
-fgm = FGM3D(
+fgm = DWA3D(
     n_az=72,
     n_el=18,
     max_range=2.0,
     bubble_radius=0.35,
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
-    gap_weight_goal=2.0,
-    gap_weight_width=0.3,
-    min_gap_cells=2,
-    edge_margin_deg=12.0,
+    w_goal=1.0,
+    w_obstacle=0.5,
+    w_smooth=0.3,
+    w_reverse=0.8,
     el_max_deg=70.0,
 )
 
