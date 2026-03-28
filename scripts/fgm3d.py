@@ -25,8 +25,6 @@ import numpy as np
 # Sensor geometry (matches x500_tof model.sdf / tof_reader.py)
 # -----------------------------------------------------------------------
 _FOV_HALF = 0.3927  # ±22.5 deg per sensor axis
-_H_SAMPLES = 8
-_V_SAMPLES = 8
 
 # 10 horizontal sensors at 36° intervals
 _HORIZONTAL_YAWS = [
@@ -40,14 +38,21 @@ _VERTICAL_PITCHES = [-math.pi / 2, math.pi / 2]  # up, down
 def _build_coverage_mask(az_centres, el_centres, az_res, el_res, n_az, n_el):
     """Compute a boolean mask of which (el, az) cells are covered by sensors.
 
-    Traces all 64 rays for each of the 12 sensors into body-frame
-    directions, converts to (az, el), and marks the corresponding grid
-    cell as covered.
+    For each sensor, projects every cell direction into the sensor's local
+    frame and checks whether it falls within the rectangular ±FOV_HALF
+    field of view.  This is exact and avoids gaps caused by discrete ray
+    sampling when the ray spacing exceeds the grid bin width.
     """
     coverage = np.zeros((n_el, n_az), dtype=bool)
-    h_angles = np.linspace(-_FOV_HALF, _FOV_HALF, _H_SAMPLES)
-    v_angles = np.linspace(-_FOV_HALF, _FOV_HALF, _V_SAMPLES)
-    el_max = el_centres[-1] + el_res / 2  # upper bound of grid
+
+    # Precompute unit direction for each grid cell (n_el, n_az, 3)
+    az_grid, el_grid = np.meshgrid(az_centres, el_centres)
+    cos_el = np.cos(el_grid)
+    cell_dirs = np.stack([
+        cos_el * np.cos(az_grid),
+        cos_el * np.sin(az_grid),
+        np.sin(el_grid),
+    ], axis=-1)
 
     def _rotz(yaw):
         c, s = math.cos(yaw), math.sin(yaw)
@@ -57,25 +62,18 @@ def _build_coverage_mask(az_centres, el_centres, az_res, el_res, n_az, n_el):
         c, s = math.cos(pitch), math.sin(pitch)
         return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
 
-    # Build ray directions in sensor-local frame (same grid as tof_reader)
-    local_dirs = []
-    for va in v_angles:
-        for ha in h_angles:
-            dx = math.cos(va) * math.cos(ha)
-            dy = math.cos(va) * math.sin(ha)
-            dz = math.sin(va)
-            local_dirs.append([dx, dy, dz])
-    local_dirs = np.array(local_dirs)  # (64, 3)
-
     def _mark(rot):
-        body_dirs = (rot @ local_dirs.T).T  # (64, 3)
-        az = np.arctan2(body_dirs[:, 1], body_dirs[:, 0])
-        el = np.arctan2(body_dirs[:, 2],
-                        np.sqrt(body_dirs[:, 0]**2 + body_dirs[:, 1]**2))
-        ai = ((az + math.pi) / az_res).astype(int) % n_az
-        ei = ((el + el_max) / el_res).astype(int)
-        ei = np.clip(ei, 0, n_el - 1)
-        coverage[ei, ai] = True
+        # Project all cell directions into sensor-local frame
+        R_inv = rot.T
+        local = np.einsum('ij,mnj->mni', R_inv, cell_dirs)  # (n_el, n_az, 3)
+        lx = local[..., 0]
+        ly = local[..., 1]
+        lz = local[..., 2]
+        # Cell is covered if in front of sensor and within rectangular FOV
+        ha = np.arctan2(ly, lx)
+        va = np.arctan2(lz, np.sqrt(lx**2 + ly**2))
+        within = (lx > 0) & (np.abs(ha) <= _FOV_HALF) & (np.abs(va) <= _FOV_HALF)
+        coverage[within] = True
 
     for yaw in _HORIZONTAL_YAWS:
         _mark(_rotz(yaw))
