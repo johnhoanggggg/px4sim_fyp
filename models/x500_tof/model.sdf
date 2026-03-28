@@ -69,13 +69,13 @@
     </link>
     <joint name="tof_3_joint" type="fixed"><parent>base_link</parent><child>tof_3_link</child></joint>
 
-    <!-- Sensor 5: 144 deg -->
+    <!-- Sensor 5: Forward-up 45 deg (was 144 deg horizontal) -->
     <link name="tof_4_link">
-      <pose relative_to="base_link">-0.202 0.147 0 0 0 2.5133</pose>
+      <pose relative_to="base_link">0.15 0 0.05 0 -0.7854 0</pose>
       <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
       <sensor name='tof_4' type='gpu_lidar'>
         <gz_frame_id>tof_4_link</gz_frame_id>
-        <pose relative_to="base_link">-0.202 0.147 0 0 0 2.5133</pose>
+        <pose relative_to="base_link">0.15 0 0.05 0 -0.7854 0</pose>
         <update_rate>12</update_rate>
         <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
@@ -101,13 +101,13 @@
     </link>
     <joint name="tof_5_joint" type="fixed"><parent>base_link</parent><child>tof_5_link</child></joint>
 
-    <!-- Sensor 7: 216 deg -->
+    <!-- Sensor 7: Forward-down 45 deg (was 216 deg horizontal) -->
     <link name="tof_6_link">
-      <pose relative_to="base_link">-0.202 -0.147 0 0 0 -2.5133</pose>
+      <pose relative_to="base_link">0.15 0 -0.05 0 0.7854 0</pose>
       <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
       <sensor name='tof_6' type='gpu_lidar'>
         <gz_frame_id>tof_6_link</gz_frame_id>
-        <pose relative_to="base_link">-0.202 -0.147 0 0 0 -2.5133</pose>
+        <pose relative_to="base_link">0.15 0 -0.05 0 0.7854 0</pose>
         <update_rate>12</update_rate>
         <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>

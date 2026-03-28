@@ -24,13 +24,13 @@ import numpy as np
 # -----------------------------------------------------------------------
 _FOV_HALF = 0.3927  # ±22.5 deg per sensor axis
 
-# 10 horizontal sensors at 36° intervals
+# 8 horizontal sensors (was 10; tof_4 and tof_6 moved to tilted)
 _HORIZONTAL_YAWS = [
-    0.0, 0.6283, 1.2566, 1.8850, 2.5133,
-    3.1416, -2.5133, -1.8850, -1.2566, -0.6283,
+    0.0, 0.6283, 1.2566, 1.8850,
+    3.1416, -1.8850, -1.2566, -0.6283,
 ]
-# 2 vertical sensors
-_VERTICAL_PITCHES = [-math.pi / 2, math.pi / 2]  # up, down
+# 4 pitched/vertical sensors: forward-up 45°, forward-down 45°, up, down
+_VERTICAL_PITCHES = [-math.pi / 4, math.pi / 4, -math.pi / 2, math.pi / 2]
 
 
 def _build_coverage_mask(az_centres, el_centres, az_res, el_res, n_az, n_el):

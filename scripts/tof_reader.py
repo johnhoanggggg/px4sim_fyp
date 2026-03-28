@@ -34,18 +34,18 @@ HORIZONTAL_SENSORS = {
     "1": {"yaw": 0.6283},
     "2": {"yaw": 1.2566},
     "3": {"yaw": 1.8850},
-    "4": {"yaw": 2.5133},
     "5": {"yaw": 3.1416},
-    "6": {"yaw": -2.5133},
     "7": {"yaw": -1.8850},
     "8": {"yaw": -1.2566},
     "9": {"yaw": -0.6283},
 }
 
-# Vertical sensors: pitch angle (rotation about Y axis in SDF)
+# Pitched / vertical sensors: pitch angle (rotation about Y axis in SDF)
 VERTICAL_SENSORS = {
-    "up":   {"pitch": -math.pi / 2},   # looking up
-    "down": {"pitch":  math.pi / 2},    # looking down
+    "4":    {"pitch": -math.pi / 4},   # forward-up 45°
+    "6":    {"pitch":  math.pi / 4},   # forward-down 45°
+    "up":   {"pitch": -math.pi / 2},   # straight up
+    "down": {"pitch":  math.pi / 2},   # straight down
 }
 
 ALL_TOPICS = [f"/tof/{k}" for k in HORIZONTAL_SENSORS] + \
