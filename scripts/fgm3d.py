@@ -126,8 +126,8 @@ class FGM3D:
         max_speed: float = 0.6,
         gap_weight_goal: float = 2.0,
         gap_weight_width: float = 0.3,
-        min_gap_cells: int = 4,
-        min_gap_metres: float = 0.5,
+        min_gap_cells: int = 2,
+        min_gap_metres: float = 0.3,
         edge_margin_deg: float = 8.0,
         el_max_deg: float = 70.0,
     ):
@@ -378,7 +378,9 @@ class FGM3D:
                     while stack:
                         ce, ca = stack.pop()
                         cells.append((ce, ca))
-                        for de, da in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                        for de, da in [(-1,-1),(-1,0),(-1,1),
+                                       (0,-1),        (0,1),
+                                       (1,-1), (1,0), (1,1)]:
                             ne = ce + de
                             na = (ca + da) % self.n_az
                             if ne < 0 or ne >= self.n_el:
@@ -417,7 +419,9 @@ class FGM3D:
         cell_set = set(cells)
         min_border_range = self.max_range
         for ce, ca in cells:
-            for de, da in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            for de, da in [(-1,-1),(-1,0),(-1,1),
+                           (0,-1),        (0,1),
+                           (1,-1), (1,0), (1,1)]:
                 ne = ce + de
                 na = (ca + da) % self.n_az
                 if ne < 0 or ne >= self.n_el:
