@@ -375,11 +375,12 @@ class FGM3D:
         Gaps are filtered by both minimum cell count and minimum
         physical width (angular span × range to nearby obstacles).
         """
-        # Gap-finding uses range map directly — a cell is free if no close
-        # obstacle was actually detected there.  Bubble inflation (used for
-        # safety margins in speed/retreat) is intentionally bypassed so that
-        # triangular spaces between truss beams are found as flyable gaps.
-        free = self._range_map >= self._bubble_radius
+        # Gap-finding uses range map directly — a cell is free if no obstacle
+        # was detected within safe_distance.  Bubble inflation (used for speed/
+        # retreat safety) is bypassed so triangular truss gaps are found, but
+        # safe_distance creates wide enough barriers around beams to form
+        # distinct gaps between them.
+        free = self._range_map >= self.safe_distance
         # Blind spots are traversable (unknown ≠ blocked)
         free[~self._coverage] = True
         if not np.any(free):
