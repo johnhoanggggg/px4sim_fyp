@@ -400,7 +400,7 @@ class VFH3D:
         """Score all cells. Non-candidate cells get inf cost.
 
         Cost = w_goal × goal_angle
-             + w_obstacle × (max_range / nearby_clearance)
+             + w_obstacle × (1 - nearby_clearance/max_range)
              + w_smooth × heading_change
              + w_reverse × backward_penalty
         """
@@ -410,10 +410,10 @@ class VFH3D:
         np.clip(dots_goal, -1.0, 1.0, out=dots_goal)
         cost_goal = np.arccos(dots_goal)
 
-        # --- cost_obstacle: inverse clearance in neighbourhood ---
+        # --- cost_obstacle: closeness of nearest obstacle in neighbourhood ---
+        # Bounded [0, 1]: 0 = no obstacle nearby, 1 = obstacle touching
         min_nearby = self._min_range_nearby()
-        np.clip(min_nearby, 0.1, None, out=min_nearby)
-        cost_obstacle = self.max_range / min_nearby
+        cost_obstacle = 1.0 - np.clip(min_nearby / self.max_range, 0, 1)
 
         # --- cost_smooth: angular distance from previous direction ---
         if self._last_chosen_az is not None:
