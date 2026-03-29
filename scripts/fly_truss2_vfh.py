@@ -95,7 +95,7 @@ vfh = VFH3D(
     w_reverse=0.8,
     safety_margin_cells=2,
     clearance_radius_cells=3,
-    el_max_deg=70.0,
+    el_max_deg=90.0,
 )
 
 # Visualizer (separate process)
