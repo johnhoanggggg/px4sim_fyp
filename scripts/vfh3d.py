@@ -171,6 +171,10 @@ class VFH3D:
         self._range_map = np.full((n_el, n_az), max_range)
         self._last_chosen_az: float | None = None
         self._last_chosen_el: float | None = None
+        self._last_total_cost: np.ndarray | None = None
+        self._last_candidate: np.ndarray | None = None
+        self._last_goal_az: float | None = None
+        self._last_goal_el: float | None = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -194,6 +198,8 @@ class VFH3D:
         goal_dist = math.sqrt(gx**2 + gy**2 + gz**2)
         goal_az = math.atan2(gy, gx)
         goal_el = math.atan2(gz, math.sqrt(gx**2 + gy**2)) if goal_dist > 0.01 else 0.0
+        self._last_goal_az = goal_az
+        self._last_goal_el = goal_el
         goal_dir = np.array([
             math.cos(goal_el) * math.cos(goal_az),
             math.cos(goal_el) * math.sin(goal_az),
@@ -213,14 +219,17 @@ class VFH3D:
 
         # 3. Enlarge blocked sectors — VFH safety margin
         candidate = self._compute_candidates()
+        self._last_candidate = candidate
 
         if not np.any(candidate):
             self._last_chosen_az = None
             self._last_chosen_el = None
+            self._last_total_cost = None
             return self._retreat(obstacle_pts, min_obs_dist)
 
         # 4. Score all candidate directions
         total_cost = self._score_candidates(candidate, goal_dir)
+        self._last_total_cost = total_cost
 
         # 5. Select lowest-cost candidate
         best_idx = np.unravel_index(np.argmin(total_cost), total_cost.shape)
@@ -263,6 +272,10 @@ class VFH3D:
             "el_centres": self._el_centres.tolist(),
             "chosen_az": self._last_chosen_az,
             "chosen_el": self._last_chosen_el,
+            "total_cost": self._last_total_cost.tolist() if self._last_total_cost is not None else None,
+            "candidate_mask": self._last_candidate.tolist() if self._last_candidate is not None else None,
+            "goal_az": self._last_goal_az,
+            "goal_el": self._last_goal_el,
         }
 
     def reset(self):
@@ -270,6 +283,10 @@ class VFH3D:
         self._range_map[:] = self.max_range
         self._last_chosen_az = None
         self._last_chosen_el = None
+        self._last_total_cost = None
+        self._last_candidate = None
+        self._last_goal_az = None
+        self._last_goal_el = None
 
     @property
     def bubble_radius(self):

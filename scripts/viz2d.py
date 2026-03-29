@@ -130,6 +130,24 @@ def run_viz(queue: mp.Queue):
     ax_sphere.axhline(0, color="white", alpha=0.3, lw=1, ls="--")
     ax_sphere.invert_xaxis()  # negative azimuth (right of drone) on right side
 
+    # View mode toggle: 'range' (default) or 'cost'
+    view_state = {"mode": "range"}
+
+    def _on_key(event):
+        if event.key == 'c':
+            view_state["mode"] = "cost" if view_state["mode"] == "range" else "range"
+
+    fig.canvas.mpl_connect('key_press_event', _on_key)
+
+    # Text overlay for metrics
+    metrics_text = ax_sphere.text(
+        0.02, 0.98, "", transform=ax_sphere.transAxes,
+        fontsize=8, fontfamily="monospace", color="white",
+        verticalalignment="top", horizontalalignment="left",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="black", alpha=0.7),
+        zorder=20,
+    )
+
     state = {"first": True}
 
     def _update(_frame):
@@ -213,18 +231,44 @@ def run_viz(queue: mp.Queue):
             az_deg = np.array(sphere["az_centres"]) * 180 / math.pi
             el_deg = np.array(sphere["el_centres"]) * 180 / math.pi
 
-            # Closeness: 1 = touching, 0 = far/free
-            closeness = 1.0 - np.clip(range_map / max_range, 0, 1)
+            mode = view_state["mode"]
 
-            # Build RGBA image (vectorized)
-            cmap = plt.cm.RdYlGn_r
-            rgba = cmap(closeness)        # (n_el, n_az, 4) all cells colored
+            if mode == "cost" and sphere.get("total_cost") is not None:
+                # --- Cost heatmap view ---
+                cost = np.array(sphere["total_cost"])
+                finite = np.isfinite(cost)
+                if np.any(finite):
+                    vmin = float(np.min(cost[finite]))
+                    vmax = float(np.max(cost[finite]))
+                    if vmax - vmin < 1e-6:
+                        vmax = vmin + 1.0
+                    norm_cost = np.clip((cost - vmin) / (vmax - vmin), 0, 1)
+                else:
+                    norm_cost = np.ones_like(cost)
+                norm_cost[~finite] = 1.0  # inf → highest cost
+                cmap_cost = plt.cm.viridis_r
+                rgba = cmap_cost(norm_cost)
+                ax_sphere.set_title(f"VFH Cost Map [press 'c' to toggle]")
+            else:
+                # --- Range closeness view (default) ---
+                closeness = 1.0 - np.clip(range_map / max_range, 0, 1)
+                cmap = plt.cm.RdYlGn_r
+                rgba = cmap(closeness)
+                ax_sphere.set_title(f"Spherical Grid [press 'c' for cost]")
 
             # Detected gaps → semi-transparent blue
             gaps = sphere.get("gaps", [])
             for gap_cells in gaps:
                 for ei, ai in gap_cells:
                     rgba[ei, ai] = [0.2, 0.4, 1.0, 0.45]
+
+            # Candidate mask overlay — dim non-candidate cells
+            cand_data = sphere.get("candidate_mask")
+            if cand_data is not None:
+                cand = np.array(cand_data, dtype=bool)
+                non_cand = ~cand & coverage  # only dim covered non-candidates
+                rgba[non_cand, :3] *= 0.4    # darken RGB
+                rgba[non_cand, 3] = 0.9      # mostly opaque
 
             # Blind spots → opaque black
             blind = ~coverage
@@ -243,6 +287,29 @@ def run_viz(queue: mp.Queue):
                 chosen_dot.set_visible(True)
             else:
                 chosen_dot.set_visible(False)
+
+            # Goal direction marker
+            g_az = sphere.get("goal_az")
+            g_el = sphere.get("goal_el")
+            if g_az is not None and g_el is not None:
+                goal_dot.set_data([math.degrees(g_az)], [math.degrees(g_el)])
+                goal_dot.set_visible(True)
+            else:
+                goal_dot.set_visible(False)
+
+        # --- Text overlay with metrics ---
+        metrics = data.get("metrics")
+        if metrics:
+            min_o = metrics.get("min_obs", float('inf'))
+            min_str = f"{min_o:.2f}m" if min_o < 100 else "---"
+            txt = (f"Spd: {metrics.get('speed', 0):.2f} m/s  "
+                   f"MinObs: {min_str}  "
+                   f"Pts: {metrics.get('n_obs', 0)}\n"
+                   f"WP: {metrics.get('wp_label', '')}  "
+                   f"Dist: {metrics.get('wp_dist', 0):.2f}m")
+            metrics_text.set_text(txt)
+        else:
+            metrics_text.set_text("")
 
         # Auto-scale on first real data
         if state["first"]:

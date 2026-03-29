@@ -207,11 +207,15 @@ for _y in _TRUSS_Y_VALS:
     _COL_POSITIONS_NED.append((_y, 1.75))
 
 
-def _push_viz(drone_n, drone_e, yaw, current_wp_idx):
+def _push_viz(drone_n, drone_e, yaw, current_wp_idx,
+              vel_body=None, min_obs=None, n_obs=0, wp_dist=0.0, wp_label=""):
     """Send state to visualizer (non-blocking)."""
     bins = vfh.get_histogram()
     chosen = vfh.get_chosen_direction()
     wps_ne = [(w[0], w[1]) for w in WAYPOINTS]
+    speed = 0.0
+    if vel_body is not None:
+        speed = float(np.sqrt(vel_body[0]**2 + vel_body[1]**2 + vel_body[2]**2))
     pkt = {
         "drone_n": drone_n,
         "drone_e": drone_e,
@@ -223,6 +227,13 @@ def _push_viz(drone_n, drone_e, yaw, current_wp_idx):
         "obstacles": _COL_POSITIONS_NED,
         "obstacle_radius": 0.08,
         "sphere": vfh.get_sphere_data(),
+        "metrics": {
+            "speed": speed,
+            "min_obs": float(min_obs) if min_obs is not None else float('inf'),
+            "n_obs": n_obs,
+            "wp_dist": wp_dist,
+            "wp_label": wp_label,
+        },
     }
     try:
         viz_queue.put_nowait(pkt)
@@ -295,11 +306,14 @@ def fly_with_avoidance(waypoints, wp_offset=0):
             except Exception:
                 pass
 
-            _push_viz(px, py, yaw, wp_idx)
-
             min_obs = float('inf')
             if len(pts) > 0:
                 min_obs = float(np.min(np.sqrt(pts[:, 0]**2 + pts[:, 1]**2 + pts[:, 2]**2)))
+
+            _push_viz(px, py, yaw, wp_idx,
+                      vel_body=vel_body, min_obs=min_obs,
+                      n_obs=len(pts), wp_dist=dist, wp_label=label)
+
             print(f"  pos:({px:.2f},{py:.2f},{-pz:.2f}m) d:{dist:.2f} "
                   f"vel:({vel_ned[0]:.2f},{vel_ned[1]:.2f},vz:{-vel_ned[2]:.2f}) "
                   f"obs:{len(pts)} min:{min_obs:.2f}")
@@ -311,7 +325,7 @@ def fly_with_avoidance(waypoints, wp_offset=0):
         pos = get_position()
         hold_z = wz if not pos else max(pos[2], wz)
         set_target(wx, wy, hold_z)
-        _push_viz(wx, wy, yaw, wp_idx)
+        _push_viz(wx, wy, yaw, wp_idx, wp_label=label)
         print(f"  Holding 2s...")
         time.sleep(2)
         use_pos_setpoints = False
