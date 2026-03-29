@@ -375,23 +375,28 @@ class FGM3D:
         Gaps are filtered by both minimum cell count and minimum
         physical width (angular span × range to nearby obstacles).
         """
-        # Denoise: remove isolated blocked cells (likely sensor noise).
-        # A blocked cell with ≤2 blocked 8-neighbours is reclassified as free.
+        # Erode blocked mask for gap-finding (self._blocked stays intact for
+        # safety).  Thin blocked barriers from bubble inflation between truss
+        # members are opened up so flood-fill can connect free regions.
+        # Two passes: first remove isolated noise, then erode thin barriers.
         blocked = self._blocked.copy()
         n_el, n_az = blocked.shape
+
+        # Count blocked 8-neighbours for each cell
         neighbour_count = np.zeros_like(blocked, dtype=int)
         for de, da in [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]:
             shifted = np.roll(blocked, -de, axis=0)
             shifted = np.roll(shifted, -da, axis=1)
-            # Invalidate rows that wrapped around elevation edges
             if de == -1:
                 shifted[-1, :] = False
             elif de == 1:
                 shifted[0, :] = False
             neighbour_count += shifted.astype(int)
-        # Isolated blocked cells: blocked but few blocked neighbours
-        isolated = blocked & (neighbour_count <= 2) & self._coverage
-        blocked[isolated] = False
+
+        # A covered blocked cell with ≤4 blocked neighbours (out of 8) is
+        # likely a thin inflation barrier — reclassify as free for gap finding.
+        thin_barrier = blocked & (neighbour_count <= 4) & self._coverage
+        blocked[thin_barrier] = False
 
         free = ~blocked
         if not np.any(free):
