@@ -378,9 +378,13 @@ class FGM3D:
         # Erode blocked mask for gap-finding (self._blocked stays intact for
         # safety).  Thin blocked barriers from bubble inflation between truss
         # members are opened up so flood-fill can connect free regions.
-        # Two passes: first remove isolated noise, then erode thin barriers.
         blocked = self._blocked.copy()
         n_el, n_az = blocked.shape
+
+        # CRITICAL: blind spots (uncovered cells) must NOT act as walls for
+        # gap-finding.  They are unknown, not confirmed obstacles.  The safety
+        # layer (self._blocked) still treats them as blocked for speed/retreat.
+        blocked[~self._coverage] = False
 
         # Count blocked 8-neighbours for each cell
         neighbour_count = np.zeros_like(blocked, dtype=int)
@@ -393,9 +397,9 @@ class FGM3D:
                 shifted[0, :] = False
             neighbour_count += shifted.astype(int)
 
-        # A covered blocked cell with ≤4 blocked neighbours (out of 8) is
+        # A blocked cell with ≤4 blocked neighbours (out of 8) is
         # likely a thin inflation barrier — reclassify as free for gap finding.
-        thin_barrier = blocked & (neighbour_count <= 4) & self._coverage
+        thin_barrier = blocked & (neighbour_count <= 4)
         blocked[thin_barrier] = False
 
         free = ~blocked

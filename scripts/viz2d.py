@@ -141,6 +141,7 @@ def run_viz(queue: mp.Queue):
     # Forward direction reference line
     ax_sphere.axvline(0, color="white", alpha=0.3, lw=1, ls="--")
     ax_sphere.axhline(0, color="white", alpha=0.3, lw=1, ls="--")
+    ax_sphere.invert_xaxis()  # negative azimuth (right of drone) on right side
 
     state = {"first": True}
 
