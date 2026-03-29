@@ -219,9 +219,9 @@ def run_viz(queue: mp.Queue):
         # --- Camera panorama background ---
         cam_frame = data.get("camera_frame")
         if cam_frame is not None:
-            # Equirectangular image maps directly to azimuth × elevation
-            # Flip vertically so lower elevation is at bottom (origin="lower")
-            cam_img.set_data(cam_frame[::-1])
+            # Flip vertical (origin="lower") and horizontal (camera longitude
+            # is clockwise / right-positive but FLU azimuth is left-positive)
+            cam_img.set_data(cam_frame[::-1, ::-1])
             cam_img.set_visible(True)
         else:
             cam_img.set_visible(False)
