@@ -375,7 +375,25 @@ class FGM3D:
         Gaps are filtered by both minimum cell count and minimum
         physical width (angular span × range to nearby obstacles).
         """
-        free = ~self._blocked
+        # Denoise: remove isolated blocked cells (likely sensor noise).
+        # A blocked cell with ≤2 blocked 8-neighbours is reclassified as free.
+        blocked = self._blocked.copy()
+        n_el, n_az = blocked.shape
+        neighbour_count = np.zeros_like(blocked, dtype=int)
+        for de, da in [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]:
+            shifted = np.roll(blocked, -de, axis=0)
+            shifted = np.roll(shifted, -da, axis=1)
+            # Invalidate rows that wrapped around elevation edges
+            if de == -1:
+                shifted[-1, :] = False
+            elif de == 1:
+                shifted[0, :] = False
+            neighbour_count += shifted.astype(int)
+        # Isolated blocked cells: blocked but few blocked neighbours
+        isolated = blocked & (neighbour_count <= 2) & self._coverage
+        blocked[isolated] = False
+
+        free = ~blocked
         if not np.any(free):
             return []
 
