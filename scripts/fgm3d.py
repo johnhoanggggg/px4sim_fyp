@@ -375,34 +375,13 @@ class FGM3D:
         Gaps are filtered by both minimum cell count and minimum
         physical width (angular span × range to nearby obstacles).
         """
-        # Erode blocked mask for gap-finding (self._blocked stays intact for
-        # safety).  Thin blocked barriers from bubble inflation between truss
-        # members are opened up so flood-fill can connect free regions.
-        blocked = self._blocked.copy()
-        n_el, n_az = blocked.shape
-
-        # CRITICAL: blind spots (uncovered cells) must NOT act as walls for
-        # gap-finding.  They are unknown, not confirmed obstacles.  The safety
-        # layer (self._blocked) still treats them as blocked for speed/retreat.
-        blocked[~self._coverage] = False
-
-        # Count blocked 8-neighbours for each cell
-        neighbour_count = np.zeros_like(blocked, dtype=int)
-        for de, da in [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]:
-            shifted = np.roll(blocked, -de, axis=0)
-            shifted = np.roll(shifted, -da, axis=1)
-            if de == -1:
-                shifted[-1, :] = False
-            elif de == 1:
-                shifted[0, :] = False
-            neighbour_count += shifted.astype(int)
-
-        # A blocked cell with ≤4 blocked neighbours (out of 8) is
-        # likely a thin inflation barrier — reclassify as free for gap finding.
-        thin_barrier = blocked & (neighbour_count <= 4)
-        blocked[thin_barrier] = False
-
-        free = ~blocked
+        # Gap-finding uses range map directly — a cell is free if no close
+        # obstacle was actually detected there.  Bubble inflation (used for
+        # safety margins in speed/retreat) is intentionally bypassed so that
+        # triangular spaces between truss beams are found as flyable gaps.
+        free = self._range_map >= self._bubble_radius
+        # Blind spots are traversable (unknown ≠ blocked)
+        free[~self._coverage] = True
         if not np.any(free):
             return []
 
