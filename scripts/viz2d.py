@@ -262,13 +262,26 @@ def run_viz(queue: mp.Queue):
                 for ei, ai in gap_cells:
                     rgba[ei, ai] = [0.2, 0.4, 1.0, 0.45]
 
-            # Candidate mask overlay — dim non-candidate cells
+            # Candidate mask overlay — show dilation fringe and dim non-candidates
             cand_data = sphere.get("candidate_mask")
+            det_data = sphere.get("detected_blocked")
             if cand_data is not None:
                 cand = np.array(cand_data, dtype=bool)
-                non_cand = ~cand & coverage  # only dim covered non-candidates
-                rgba[non_cand, :3] *= 0.4    # darken RGB
-                rgba[non_cand, 3] = 0.9      # mostly opaque
+                if det_data is not None:
+                    det = np.array(det_data, dtype=bool)
+                    # Dilation fringe: not candidate, not originally detected, covered
+                    fringe = ~cand & ~det & coverage
+                    rgba[fringe] = [1.0, 0.5, 0.0, 0.7]  # orange = dilation zone
+                # Remaining non-candidates (originally blocked detections) stay as-is
+                # but dim any non-candidate covered cell not already fringed
+                non_cand = ~cand & coverage
+                if det_data is not None:
+                    non_cand_orig = non_cand & np.array(det_data, dtype=bool)
+                    rgba[non_cand_orig, :3] *= 0.6
+                    rgba[non_cand_orig, 3] = 0.95
+                else:
+                    rgba[non_cand, :3] *= 0.4
+                    rgba[non_cand, 3] = 0.9
 
             # Blind spots → opaque black
             blind = ~coverage

@@ -173,6 +173,7 @@ class VFH3D:
         self._last_chosen_el: float | None = None
         self._last_total_cost: np.ndarray | None = None
         self._last_candidate: np.ndarray | None = None
+        self._last_detected_blocked: np.ndarray | None = None
         self._last_goal_az: float | None = None
         self._last_goal_el: float | None = None
 
@@ -274,6 +275,7 @@ class VFH3D:
             "chosen_el": self._last_chosen_el,
             "total_cost": self._last_total_cost.tolist() if self._last_total_cost is not None else None,
             "candidate_mask": self._last_candidate.tolist() if self._last_candidate is not None else None,
+            "detected_blocked": self._last_detected_blocked.tolist() if self._last_detected_blocked is not None else None,
             "goal_az": self._last_goal_az,
             "goal_el": self._last_goal_el,
         }
@@ -285,6 +287,7 @@ class VFH3D:
         self._last_chosen_el = None
         self._last_total_cost = None
         self._last_candidate = None
+        self._last_detected_blocked = None
         self._last_goal_az = None
         self._last_goal_el = None
 
@@ -347,14 +350,20 @@ class VFH3D:
         This is the VFH "enlarged" histogram step — ensures candidate
         directions are at least safety_margin_cells away from any blocked
         sector, keeping the drone well clear of obstacle boundaries.
+
+        Only *detected* obstacles are dilated.  Blind spots (uncovered cells
+        with no nearby obstacle) are left as candidates — unknown ≠ blocked.
         """
-        dilated = self._blocked.copy()
+        # Only dilate cells blocked by actual detections, not blind spots
+        detected_blocked = self._blocked & self._coverage
+        self._last_detected_blocked = detected_blocked
+        dilated = detected_blocked.copy()
         m = self._safety_margin_cells
         for de in range(-m, m + 1):
             for da in range(-m, m + 1):
                 if de == 0 and da == 0:
                     continue
-                shifted = np.roll(self._blocked, -da, axis=1)  # azimuth wraps
+                shifted = np.roll(detected_blocked, -da, axis=1)  # azimuth wraps
                 if de > 0:
                     shifted = np.pad(shifted[de:], ((0, de), (0, 0)),
                                      constant_values=True)
