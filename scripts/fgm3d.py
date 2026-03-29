@@ -130,6 +130,7 @@ class FGM3D:
         min_gap_metres: float = 0.3,
         edge_margin_deg: float = 8.0,
         el_max_deg: float = 70.0,
+        heading_smooth: float = 0.4,
     ):
         self.n_az = n_az
         self.n_el = n_el
@@ -143,6 +144,7 @@ class FGM3D:
         self.min_gap_metres = min_gap_metres
         self.edge_margin = math.radians(edge_margin_deg)
         self.el_max = math.radians(el_max_deg)
+        self._heading_smooth = heading_smooth
 
         # Azimuth bin centres [-pi, pi)
         self._az_res = 2 * math.pi / n_az
@@ -176,6 +178,7 @@ class FGM3D:
         self._range_map = np.full((n_el, n_az), max_range)
         self._last_chosen_az: float | None = None
         self._last_chosen_el: float | None = None
+        self._last_gaps: list = []
 
         # Stuck detection
         self._stuck_counter = 0
@@ -232,6 +235,7 @@ class FGM3D:
 
         # 4. Find gaps via connected-component flood fill
         gaps = self._find_gaps()
+        self._last_gaps = gaps
 
         # 5. No passable gap → back away from nearest obstacle
         if not gaps:
@@ -241,13 +245,21 @@ class FGM3D:
 
         # 6. Pick best gap and steering direction
         best_az, best_el = self._select_gap(gaps, goal_az, goal_el)
+
+        # 7. Heading smoothing — angular EMA with shortest-arc interpolation
+        if self._last_chosen_az is not None and self._heading_smooth < 1.0:
+            alpha = self._heading_smooth
+            delta_az = (best_az - self._last_chosen_az + math.pi) % (2 * math.pi) - math.pi
+            best_az = self._last_chosen_az + alpha * delta_az
+            best_el = (1 - alpha) * self._last_chosen_el + alpha * best_el
+
         self._last_chosen_az = best_az
         self._last_chosen_el = best_el
 
-        # 7. Compute speed (slow near obstacles)
+        # 8. Compute speed (slow near obstacles)
         speed = self._compute_speed(min_obs_dist)
 
-        # 8. Convert spherical steering direction to Cartesian velocity
+        # 9. Convert spherical steering direction to Cartesian velocity
         cos_el = math.cos(best_el)
         vx = speed * cos_el * math.cos(best_az)
         vy = speed * cos_el * math.sin(best_az)
@@ -283,6 +295,7 @@ class FGM3D:
             "el_centres": self._el_centres.tolist(),
             "chosen_az": self._last_chosen_az,
             "chosen_el": self._last_chosen_el,
+            "gaps": self._last_gaps,
         }
 
     def reset(self):
@@ -290,6 +303,7 @@ class FGM3D:
         self._range_map[:] = self.max_range
         self._last_chosen_az = None
         self._last_chosen_el = None
+        self._last_gaps = []
         self._stuck_counter = 0
         self._prev_goal_dist = float('inf')
 

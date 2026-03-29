@@ -106,15 +106,26 @@ def run_viz(queue: mp.Queue):
     ax_sphere.set_ylabel("Elevation (deg)")
     ax_sphere.set_title("Spherical Blocked Grid (body FLU)")
 
-    # Initialize with a blank RGBA image; will be replaced on first data
-    # Black = blind spot (no sensor coverage)
-    # Green→Yellow→Red = covered, far→close obstacle
+    # Camera panorama background (below obstacle overlay)
+    cam_img = ax_sphere.imshow(
+        np.zeros((140, 360, 3), dtype=np.uint8),
+        aspect="auto",
+        origin="lower",
+        extent=[-180, 180, -70, 70],
+        interpolation="bilinear",
+        zorder=0,
+    )
+    cam_img.set_visible(False)
+
+    # Obstacle overlay with alpha channel (above camera)
+    # Black = blind spot, Green→Yellow→Red = far→close, Blue = detected gap
     sphere_img = ax_sphere.imshow(
         np.zeros((18, 72, 4)),  # RGBA
         aspect="auto",
         origin="lower",
         extent=[-180, 180, -70, 70],
         interpolation="nearest",
+        zorder=1,
     )
     # Colorbar: use a scalar mappable for the legend
     import matplotlib.cm as cm
@@ -205,6 +216,16 @@ def run_viz(queue: mp.Queue):
         else:
             chosen_line.set_visible(False)
 
+        # --- Camera panorama background ---
+        cam_frame = data.get("camera_frame")
+        if cam_frame is not None:
+            # Equirectangular image maps directly to azimuth × elevation
+            # Flip vertically so lower elevation is at bottom (origin="lower")
+            cam_img.set_data(cam_frame[::-1])
+            cam_img.set_visible(True)
+        else:
+            cam_img.set_visible(False)
+
         # --- Spherical grid panel ---
         sphere = data.get("sphere")
         if sphere is not None:
@@ -218,16 +239,35 @@ def run_viz(queue: mp.Queue):
             closeness = 1.0 - np.clip(range_map / max_range, 0, 1)
 
             # Build RGBA image (vectorized)
-            # Covered cells: RdYlGn_r colormap (green=far, red=close)
-            # Uncovered cells: black (blind spot)
             cmap = plt.cm.RdYlGn_r
             rgba = cmap(closeness)        # (n_el, n_az, 4) all cells colored
+
+            # Detected gaps → semi-transparent blue
+            gaps = sphere.get("gaps", [])
+            for gap_cells in gaps:
+                for ei, ai in gap_cells:
+                    rgba[ei, ai] = [0.2, 0.4, 1.0, 0.45]
+
+            # Blind spots → opaque black
             blind = ~coverage
-            rgba[blind] = [0.0, 0.0, 0.0, 1.0]  # overwrite blind spots
+            rgba[blind] = [0.0, 0.0, 0.0, 1.0]
+
+            # Alpha: obstacles opaque, clear areas semi-transparent (camera shows through)
+            covered = coverage
+            if cam_frame is not None:
+                # With camera: clear cells become translucent so camera is visible
+                rgba[covered, 3] = np.clip(closeness[covered] * 1.5 + 0.15, 0.15, 0.85)
+                # Gap cells stay at their set alpha (0.45)
+                for gap_cells in gaps:
+                    for ei, ai in gap_cells:
+                        if coverage[ei, ai]:
+                            rgba[ei, ai, 3] = 0.45
 
             sphere_img.set_data(rgba)
-            sphere_img.set_extent([az_deg[0] - 2.5, az_deg[-1] + 2.5,
-                                   el_deg[0] - 4, el_deg[-1] + 4])
+            ext = [az_deg[0] - 2.5, az_deg[-1] + 2.5,
+                   el_deg[0] - 4, el_deg[-1] + 4]
+            sphere_img.set_extent(ext)
+            cam_img.set_extent(ext)
 
             # Chosen steering direction
             s_az = sphere.get("chosen_az")

@@ -24,6 +24,7 @@ from pymavlink import mavutil
 
 from tof_reader import TofReader
 from dwa3d import DWA3D
+from camera_reader import CameraReader
 from viz2d import run_viz
 
 # ---------------------------------------------------------------------------
@@ -87,6 +88,7 @@ target_lock = threading.Lock()
 # Modules
 # ---------------------------------------------------------------------------
 tof = TofReader()
+cam = CameraReader()
 fgm = DWA3D(
     n_az=72,
     n_el=18,
@@ -227,6 +229,7 @@ def _push_viz(drone_n, drone_e, yaw, current_wp_idx):
         "obstacles": _COL_POSITIONS_NED,
         "obstacle_radius": 0.08,
         "sphere": fgm.get_sphere_data(),
+        "camera_frame": cam.get_latest_frame(),
     }
     try:
         viz_queue.put_nowait(pkt)
