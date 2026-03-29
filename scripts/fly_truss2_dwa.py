@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Offboard control with 3-D Follow-the-Gap (FGM) obstacle avoidance through
+Offboard control with bidirectional 3-D DWA obstacle avoidance through
 a multi-layer roof truss lattice.
 
-FGM3D handles both horizontal (XY) and vertical (Z) avoidance so the drone
-can thread through gaps between beams at different heights.
+DWA3D scores all directions on a spherical grid with a weighted cost
+function and can back out of tight spaces.
 
 Usage:
     1. Start PX4 SITL:
          cd ~/PX4-Autopilot && PX4_GZ_WORLD=truss2 make px4_sitl gz_x500_tof
     2. Run this script:
-         python3 fly_truss2_fgm.py
+         python3 fly_truss2_dwa.py
 """
 
 import time
@@ -23,7 +23,7 @@ import numpy as np
 from pymavlink import mavutil
 
 from tof_reader import TofReader
-from fgm3d import FGM3D
+from dwa3d import DWA3D
 from viz2d import run_viz
 
 # ---------------------------------------------------------------------------
@@ -87,17 +87,17 @@ target_lock = threading.Lock()
 # Modules
 # ---------------------------------------------------------------------------
 tof = TofReader()
-fgm = FGM3D(
+fgm = DWA3D(
     n_az=72,
     n_el=18,
     max_range=2.0,
     bubble_radius=0.35,
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
-    gap_weight_goal=2.0,
-    gap_weight_width=0.3,
-    min_gap_cells=2,
-    edge_margin_deg=12.0,
+    w_goal=1.0,
+    w_obstacle=0.5,
+    w_smooth=0.3,
+    w_reverse=0.8,
     el_max_deg=70.0,
 )
 
@@ -243,7 +243,7 @@ def fly_with_avoidance(waypoints, wp_offset=0):
 
     for i, (wx, wy, wz, label) in enumerate(waypoints):
         wp_idx = i + wp_offset
-        print(f"\n>>> [{wp_idx+1}/{len(WAYPOINTS)}] {label}  (FGM3D)")
+        print(f"\n>>> [{wp_idx+1}/{len(WAYPOINTS)}] {label}  (DWA3D)")
         t0 = time.time()
 
         while time.time() - t0 < 60:
@@ -268,7 +268,7 @@ def fly_with_avoidance(waypoints, wp_offset=0):
             # Obstacles
             pts = tof.get_obstacle_points(max_range=2.0)
 
-            # FGM3D — handles both obstacle and no-obstacle cases
+            # DWA3D — handles both obstacle and no-obstacle cases
             vel_body = fgm.update(pts, goal_body)
 
             # Body FLU → NED

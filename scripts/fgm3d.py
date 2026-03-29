@@ -25,29 +25,34 @@ import numpy as np
 # Sensor geometry (matches x500_tof model.sdf / tof_reader.py)
 # -----------------------------------------------------------------------
 _FOV_HALF = 0.3927  # ±22.5 deg per sensor axis
-_H_SAMPLES = 8
-_V_SAMPLES = 8
 
-# 10 horizontal sensors at 36° intervals
+# 8 horizontal sensors (was 10; tof_4 and tof_6 moved to tilted)
 _HORIZONTAL_YAWS = [
-    0.0, 0.6283, 1.2566, 1.8850, 2.5133,
-    3.1416, -2.5133, -1.8850, -1.2566, -0.6283,
+    0.0, 0.6283, 1.2566, 1.8850,
+    3.1416, -1.8850, -1.2566, -0.6283,
 ]
-# 2 vertical sensors
-_VERTICAL_PITCHES = [-math.pi / 2, math.pi / 2]  # up, down
+# 4 pitched/vertical sensors: forward-up 45°, forward-down 45°, up, down
+_VERTICAL_PITCHES = [-math.pi / 4, math.pi / 4, -math.pi / 2, math.pi / 2]
 
 
 def _build_coverage_mask(az_centres, el_centres, az_res, el_res, n_az, n_el):
     """Compute a boolean mask of which (el, az) cells are covered by sensors.
 
-    Traces all 64 rays for each of the 12 sensors into body-frame
-    directions, converts to (az, el), and marks the corresponding grid
-    cell as covered.
+    For each sensor, projects every cell direction into the sensor's local
+    frame and checks whether it falls within the rectangular ±FOV_HALF
+    field of view.  This is exact and avoids gaps caused by discrete ray
+    sampling when the ray spacing exceeds the grid bin width.
     """
     coverage = np.zeros((n_el, n_az), dtype=bool)
-    h_angles = np.linspace(-_FOV_HALF, _FOV_HALF, _H_SAMPLES)
-    v_angles = np.linspace(-_FOV_HALF, _FOV_HALF, _V_SAMPLES)
-    el_max = el_centres[-1] + el_res / 2  # upper bound of grid
+
+    # Precompute unit direction for each grid cell (n_el, n_az, 3)
+    az_grid, el_grid = np.meshgrid(az_centres, el_centres)
+    cos_el = np.cos(el_grid)
+    cell_dirs = np.stack([
+        cos_el * np.cos(az_grid),
+        cos_el * np.sin(az_grid),
+        np.sin(el_grid),
+    ], axis=-1)
 
     def _rotz(yaw):
         c, s = math.cos(yaw), math.sin(yaw)
@@ -57,25 +62,18 @@ def _build_coverage_mask(az_centres, el_centres, az_res, el_res, n_az, n_el):
         c, s = math.cos(pitch), math.sin(pitch)
         return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
 
-    # Build ray directions in sensor-local frame (same grid as tof_reader)
-    local_dirs = []
-    for va in v_angles:
-        for ha in h_angles:
-            dx = math.cos(va) * math.cos(ha)
-            dy = math.cos(va) * math.sin(ha)
-            dz = math.sin(va)
-            local_dirs.append([dx, dy, dz])
-    local_dirs = np.array(local_dirs)  # (64, 3)
-
     def _mark(rot):
-        body_dirs = (rot @ local_dirs.T).T  # (64, 3)
-        az = np.arctan2(body_dirs[:, 1], body_dirs[:, 0])
-        el = np.arctan2(body_dirs[:, 2],
-                        np.sqrt(body_dirs[:, 0]**2 + body_dirs[:, 1]**2))
-        ai = ((az + math.pi) / az_res).astype(int) % n_az
-        ei = ((el + el_max) / el_res).astype(int)
-        ei = np.clip(ei, 0, n_el - 1)
-        coverage[ei, ai] = True
+        # Project all cell directions into sensor-local frame
+        R_inv = rot.T
+        local = np.einsum('ij,mnj->mni', R_inv, cell_dirs)  # (n_el, n_az, 3)
+        lx = local[..., 0]
+        ly = local[..., 1]
+        lz = local[..., 2]
+        # Cell is covered if in front of sensor and within rectangular FOV
+        ha = np.arctan2(ly, lx)
+        va = np.arctan2(lz, np.sqrt(lx**2 + ly**2))
+        within = (lx > 0) & (np.abs(ha) <= _FOV_HALF) & (np.abs(va) <= _FOV_HALF)
+        coverage[within] = True
 
     for yaw in _HORIZONTAL_YAWS:
         _mark(_rotz(yaw))
@@ -128,10 +126,11 @@ class FGM3D:
         max_speed: float = 0.6,
         gap_weight_goal: float = 2.0,
         gap_weight_width: float = 0.3,
-        min_gap_cells: int = 4,
-        min_gap_metres: float = 0.5,
+        min_gap_cells: int = 2,
+        min_gap_metres: float = 0.3,
         edge_margin_deg: float = 8.0,
         el_max_deg: float = 70.0,
+        heading_smooth: float = 0.4,
     ):
         self.n_az = n_az
         self.n_el = n_el
@@ -145,6 +144,7 @@ class FGM3D:
         self.min_gap_metres = min_gap_metres
         self.edge_margin = math.radians(edge_margin_deg)
         self.el_max = math.radians(el_max_deg)
+        self._heading_smooth = heading_smooth
 
         # Azimuth bin centres [-pi, pi)
         self._az_res = 2 * math.pi / n_az
@@ -178,6 +178,11 @@ class FGM3D:
         self._range_map = np.full((n_el, n_az), max_range)
         self._last_chosen_az: float | None = None
         self._last_chosen_el: float | None = None
+        self._last_gaps: list = []
+
+        # Stuck detection
+        self._stuck_counter = 0
+        self._prev_goal_dist = float('inf')
 
     # ------------------------------------------------------------------
     # Public API
@@ -205,32 +210,62 @@ class FGM3D:
         # 1. Build spherical range map and blocked mask
         self._build_map(obstacle_pts)
 
-        # 2. Find min obstacle distance (for speed scaling)
-        min_obs_dist = float('inf')
+        # 2. Find min obstacle distances
+        min_obs_dist = float('inf')       # all directions (for speed scaling)
+        min_fwd_obs_dist = float('inf')   # forward hemisphere (for retreat)
         if len(obstacle_pts) > 0:
             dists = np.sqrt(np.sum(obstacle_pts**2, axis=1))
             valid = dists > 0.05
             if np.any(valid):
                 min_obs_dist = float(np.min(dists[valid]))
+                # Forward hemisphere: obstacle X > 0 in body FLU (ahead of drone)
+                fwd = valid & (obstacle_pts[:, 0] > 0)
+                if np.any(fwd):
+                    min_fwd_obs_dist = float(np.min(dists[fwd]))
 
-        # 3. Find gaps via connected-component flood fill
+        # 3. Stuck detection: if not making progress toward goal, retreat
+        if goal_dist < self._prev_goal_dist - 0.05:
+            self._stuck_counter = 0
+        else:
+            self._stuck_counter += 1
+        self._prev_goal_dist = goal_dist
+
+        # Force retreat if stuck too long or forward obstacle within bubble radius.
+        # Only forward obstacles trigger retreat — side beams in truss gaps don't.
+        if self._stuck_counter > 20 or min_fwd_obs_dist < self._bubble_radius:
+            self._last_chosen_az = None
+            self._last_chosen_el = None
+            if self._stuck_counter > 20:
+                self._stuck_counter = 0
+            return self._retreat(obstacle_pts, min_obs_dist)
+
+        # 4. Find gaps via connected-component flood fill
         gaps = self._find_gaps()
+        self._last_gaps = gaps
 
-        # 4. No passable gap → back away from nearest obstacle
+        # 5. No passable gap → back away from nearest obstacle
         if not gaps:
             self._last_chosen_az = None
             self._last_chosen_el = None
             return self._retreat(obstacle_pts, min_obs_dist)
 
-        # 5. Pick best gap and steering direction
+        # 6. Pick best gap and steering direction
         best_az, best_el = self._select_gap(gaps, goal_az, goal_el)
+
+        # 7. Heading smoothing — angular EMA with shortest-arc interpolation
+        if self._last_chosen_az is not None and self._heading_smooth < 1.0:
+            alpha = self._heading_smooth
+            delta_az = (best_az - self._last_chosen_az + math.pi) % (2 * math.pi) - math.pi
+            best_az = self._last_chosen_az + alpha * delta_az
+            best_el = (1 - alpha) * self._last_chosen_el + alpha * best_el
+
         self._last_chosen_az = best_az
         self._last_chosen_el = best_el
 
-        # 6. Compute speed (slow near obstacles)
+        # 8. Compute speed (slow near obstacles)
         speed = self._compute_speed(min_obs_dist)
 
-        # 7. Convert spherical steering direction to Cartesian velocity
+        # 9. Convert spherical steering direction to Cartesian velocity
         cos_el = math.cos(best_el)
         vx = speed * cos_el * math.cos(best_az)
         vy = speed * cos_el * math.sin(best_az)
@@ -266,6 +301,7 @@ class FGM3D:
             "el_centres": self._el_centres.tolist(),
             "chosen_az": self._last_chosen_az,
             "chosen_el": self._last_chosen_el,
+            "gaps": self._last_gaps,
         }
 
     def reset(self):
@@ -273,6 +309,9 @@ class FGM3D:
         self._range_map[:] = self.max_range
         self._last_chosen_az = None
         self._last_chosen_el = None
+        self._last_gaps = []
+        self._stuck_counter = 0
+        self._prev_goal_dist = float('inf')
 
     @property
     def bubble_radius(self):
@@ -342,7 +381,14 @@ class FGM3D:
         Gaps are filtered by both minimum cell count and minimum
         physical width (angular span × range to nearby obstacles).
         """
-        free = ~self._blocked
+        # Gap-finding uses range map directly — a cell is free if no obstacle
+        # was detected within safe_distance.  Bubble inflation (used for speed/
+        # retreat safety) is bypassed so triangular truss gaps are found, but
+        # safe_distance creates wide enough barriers around beams to form
+        # distinct gaps between them.
+        free = self._range_map >= self.safe_distance
+        # Blind spots are traversable (unknown ≠ blocked)
+        free[~self._coverage] = True
         if not np.any(free):
             return []
 
@@ -359,7 +405,9 @@ class FGM3D:
                     while stack:
                         ce, ca = stack.pop()
                         cells.append((ce, ca))
-                        for de, da in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                        for de, da in [(-1,-1),(-1,0),(-1,1),
+                                       (0,-1),        (0,1),
+                                       (1,-1), (1,0), (1,1)]:
                             ne = ce + de
                             na = (ca + da) % self.n_az
                             if ne < 0 or ne >= self.n_el:
@@ -398,7 +446,9 @@ class FGM3D:
         cell_set = set(cells)
         min_border_range = self.max_range
         for ce, ca in cells:
-            for de, da in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            for de, da in [(-1,-1),(-1,0),(-1,1),
+                           (0,-1),        (0,1),
+                           (1,-1), (1,0), (1,1)]:
                 ne = ce + de
                 na = (ca + da) % self.n_az
                 if ne < 0 or ne >= self.n_el:
@@ -417,7 +467,7 @@ class FGM3D:
         Pick the best gap and return (az, el) steering direction.
 
         For each gap, find the free cell closest to the goal direction.
-        Score gaps by angular proximity to goal + size bonus.
+        Score gaps by angular proximity to goal + size bonus + clearance.
         """
         best_score = float('inf')
         best_az = goal_az
@@ -432,8 +482,9 @@ class FGM3D:
         for cells in gaps:
             gap_size = len(cells)
 
-            # Find cell in this gap closest to goal direction
-            min_ang = float('inf')
+            # Find cell in this gap closest to goal direction,
+            # but penalise cells near obstacles (low range_map)
+            best_cell_score = float('inf')
             steer_az, steer_el = goal_az, goal_el
 
             for ei, ai in cells:
@@ -441,7 +492,12 @@ class FGM3D:
                 dot = float(np.dot(cell_dir, goal_dir))
                 dot = max(-1.0, min(1.0, dot))
                 ang = math.acos(dot)
-                if ang < min_ang:
+                # Clearance penalty: prefer cells far from obstacles
+                clearance = self._range_map[ei, ai]
+                clearance_penalty = self.max_range / max(clearance, 0.1)
+                cell_score = ang + 0.3 * clearance_penalty
+                if cell_score < best_cell_score:
+                    best_cell_score = cell_score
                     min_ang = ang
                     steer_az = self._az_centres[ai]
                     steer_el = self._el_centres[ei]
@@ -539,7 +595,7 @@ class FGM3D:
     def _compute_speed(self, min_obs_dist: float) -> float:
         if min_obs_dist >= self.safe_distance:
             return self.max_speed
-        ratio = max(min_obs_dist / self.safe_distance, 0.15)
+        ratio = max(min_obs_dist / self.safe_distance, 0.1)
         return self.max_speed * ratio
 
 
