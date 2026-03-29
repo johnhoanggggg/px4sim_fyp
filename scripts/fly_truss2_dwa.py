@@ -44,7 +44,6 @@ VEL_SMOOTH = 0.3         # EMA alpha for velocity smoothing
 #   NED: north=enu_y, east=enu_x, down=-enu_z
 WAYPOINTS = [
     ( 0.0,   0.0,  -1.2,  "Takeoff south of structure"),
-    ( 3.0,   0.0,  -1.2,  "Approach structure low"),
     ( 5.9,   1.0,  -2.0,  "Bay 0-1: right side, below collar z=2.5"),
     ( 7.7,   0.0,  -3.0,  "Bay 1-2: fly high, no collar on t1"),
     ( 9.5,  -1.0,  -2.5,  "Bay 2-3: left, below t2 collar z=3.0"),
@@ -90,15 +89,15 @@ tof = TofReader()
 fgm = DWA3D(
     n_az=72,
     n_el=18,
-    max_range=2.0,
-    bubble_radius=0.35,
+    max_range=1.5,
+    bubble_radius=0.2,
     safe_distance=SAFE_DISTANCE,
     max_speed=MAX_SPEED,
     w_goal=1.0,
-    w_obstacle=0.5,
+    w_obstacle=1,
     w_smooth=0.3,
-    w_reverse=0.8,
-    el_max_deg=70.0,
+    w_reverse=0.1,
+    el_max_deg=89.0,
 )
 
 # Visualizer (separate process) — reuses the 2-D top-down view
