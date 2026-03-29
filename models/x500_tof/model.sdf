@@ -197,28 +197,5 @@
     </link>
     <joint name="tof_down_joint" type="fixed"><parent>base_link</parent><child>tof_down_link</child></joint>
 
-    <!-- 360-degree equirectangular camera for visualization overlay -->
-    <link name="camera_360_link">
-      <pose relative_to="base_link">0 0 0.05 0 0 0</pose>
-      <inertial><mass>0.001</mass><inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
-      <sensor name='camera_360' type='wideanglecamera'>
-        <gz_frame_id>camera_360_link</gz_frame_id>
-        <pose relative_to="base_link">0 0 0.05 0 0 0</pose>
-        <update_rate>10</update_rate>
-        <camera>
-          <horizontal_fov>6.28318</horizontal_fov>
-          <image><width>360</width><height>140</height><format>RGB_INT8</format></image>
-          <lens>
-            <type>equirectangular</type>
-            <env_texture_size>512</env_texture_size>
-          </lens>
-        </camera>
-        <always_on>1</always_on>
-        <visualize>false</visualize>
-        <topic>/camera/panoramic</topic>
-      </sensor>
-    </link>
-    <joint name="camera_360_joint" type="fixed"><parent>base_link</parent><child>camera_360_link</child></joint>
-
   </model>
 </sdf>
