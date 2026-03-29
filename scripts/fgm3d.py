@@ -225,8 +225,10 @@ class FGM3D:
             self._stuck_counter += 1
         self._prev_goal_dist = goal_dist
 
-        # Force retreat if stuck too long or inside bubble radius
-        if self._stuck_counter > 20 or min_obs_dist < self._bubble_radius:
+        # Force retreat if stuck too long or extremely close to obstacle.
+        # Use half bubble_radius as emergency threshold — full bubble_radius
+        # triggers too easily in truss structures where side beams are close.
+        if self._stuck_counter > 20 or min_obs_dist < self._bubble_radius * 0.5:
             self._last_chosen_az = None
             self._last_chosen_el = None
             if self._stuck_counter > 20:
