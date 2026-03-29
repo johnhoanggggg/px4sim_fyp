@@ -210,13 +210,18 @@ class FGM3D:
         # 1. Build spherical range map and blocked mask
         self._build_map(obstacle_pts)
 
-        # 2. Find min obstacle distance (for speed scaling)
-        min_obs_dist = float('inf')
+        # 2. Find min obstacle distances
+        min_obs_dist = float('inf')       # all directions (for speed scaling)
+        min_fwd_obs_dist = float('inf')   # forward hemisphere (for retreat)
         if len(obstacle_pts) > 0:
             dists = np.sqrt(np.sum(obstacle_pts**2, axis=1))
             valid = dists > 0.05
             if np.any(valid):
                 min_obs_dist = float(np.min(dists[valid]))
+                # Forward hemisphere: obstacle X > 0 in body FLU (ahead of drone)
+                fwd = valid & (obstacle_pts[:, 0] > 0)
+                if np.any(fwd):
+                    min_fwd_obs_dist = float(np.min(dists[fwd]))
 
         # 3. Stuck detection: if not making progress toward goal, retreat
         if goal_dist < self._prev_goal_dist - 0.05:
@@ -225,10 +230,9 @@ class FGM3D:
             self._stuck_counter += 1
         self._prev_goal_dist = goal_dist
 
-        # Force retreat if stuck too long or extremely close to obstacle.
-        # Use half bubble_radius as emergency threshold — full bubble_radius
-        # triggers too easily in truss structures where side beams are close.
-        if self._stuck_counter > 20 or min_obs_dist < self._bubble_radius * 0.5:
+        # Force retreat if stuck too long or forward obstacle within bubble radius.
+        # Only forward obstacles trigger retreat — side beams in truss gaps don't.
+        if self._stuck_counter > 20 or min_fwd_obs_dist < self._bubble_radius:
             self._last_chosen_az = None
             self._last_chosen_el = None
             if self._stuck_counter > 20:
