@@ -219,10 +219,9 @@ def run_viz(queue: mp.Queue):
         # --- Camera panorama background ---
         cam_frame = data.get("camera_frame")
         if cam_frame is not None:
-            # Horizontal flip only: camera longitude is right-positive
-            # but FLU azimuth is left-positive. No vertical flip needed —
-            # Gazebo equirectangular row 0 = looking down, matching origin="lower"
-            cam_img.set_data(cam_frame[:, ::-1])
+            # Vertical flip for origin="lower" (row 0 = top of image = looking up).
+            # No horizontal flip — test alignment first.
+            cam_img.set_data(cam_frame[::-1])
             cam_img.set_visible(True)
         else:
             cam_img.set_visible(False)
