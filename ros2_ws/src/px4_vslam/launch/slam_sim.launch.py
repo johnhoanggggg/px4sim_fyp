@@ -25,12 +25,48 @@ def generate_launch_description():
     pkg_dir = get_package_share_directory('px4_vslam')
     config_file = os.path.join(pkg_dir, 'config', 'rtabmap_params.yaml')
 
+    # Gazebo uses frame_id "x500_tof_0/oakd_left_link/oakd_left" etc.
+    # RTAB-Map needs base_link → camera transforms via TF.
+    # Publish static transforms: base_link → each camera frame
+    # Left camera: (0.10, 0.0375, -0.02) from base_link
+    tf_left = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=[
+            '0.10', '0.0375', '-0.02', '0', '0', '0',
+            'base_link', 'x500_tof_0/oakd_left_link/oakd_left',
+        ],
+    )
+
+    # Right camera: (0.10, -0.0375, -0.02) from base_link
+    tf_right = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=[
+            '0.10', '-0.0375', '-0.02', '0', '0', '0',
+            'base_link', 'x500_tof_0/oakd_right_link/oakd_right',
+        ],
+    )
+
+    # IMU: (0.10, 0, -0.02) from base_link
+    tf_imu = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=[
+            '0.10', '0', '-0.02', '0', '0', '0',
+            'base_link', 'x500_tof_0/oakd_imu_link/oakd_imu',
+        ],
+    )
+
     # RTAB-Map stereo odometry
     rtabmap_odom = Node(
         package='rtabmap_odom',
         executable='stereo_odometry',
         name='rtabmap_odom',
-        parameters=[config_file],
+        parameters=[
+            config_file,
+            {'approx_sync': True},  # Left/right may have slightly different timestamps
+        ],
         remappings=[
             ('left/image_rect', '/oakd/left/image_raw'),
             ('right/image_rect', '/oakd/right/image_raw'),
@@ -48,7 +84,7 @@ def generate_launch_description():
         name='rtabmap',
         parameters=[
             config_file,
-            {'subscribe_stereo': True},
+            {'subscribe_stereo': True, 'approx_sync': True},
         ],
         remappings=[
             ('left/image_rect', '/oakd/left/image_raw'),
@@ -70,6 +106,9 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        tf_left,
+        tf_right,
+        tf_imu,
         rtabmap_odom,
         rtabmap_slam,
         slam_bridge,
