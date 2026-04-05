@@ -1,0 +1,28 @@
+# PX4 EKF2 parameters for vision pose fusion (RTAB-Map → EKF2)
+#
+# Set these via PX4 param commands or QGroundControl before flight:
+#   param set EKF2_EV_CTRL 15
+#   param set EKF2_EV_DELAY 50
+#
+# Or load via: px4-param load ekf2_vision.yaml
+
+# Enable external vision fusion (bitmask: pos+vel+yaw+height = 15)
+EKF2_EV_CTRL: 15
+
+# Estimated delay of vision system (ms) — tune based on RTAB-Map latency
+EKF2_EV_DELAY: 50
+
+# Vision measurement noise (position, m)
+EKF2_EVP_NOISE: 0.05
+
+# Vision measurement noise (velocity, m/s)
+EKF2_EVV_NOISE: 0.1
+
+# Vision measurement noise (yaw, rad)
+EKF2_EVA_NOISE: 0.05
+
+# Use vision as primary height source (2 = EV)
+EKF2_HGT_REF: 2
+
+# Disable GPS fusion if flying indoors
+EKF2_GPS_CTRL: 0
