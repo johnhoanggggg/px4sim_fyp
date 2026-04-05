@@ -40,12 +40,34 @@ def generate_launch_description():
     )
 
     # --- ros_gz_bridge ---
+    # Use command-line argument style for maximum compatibility
+    bridge_args = [
+        # ToF sensors (12x gpu_lidar)
+        '/tof/0@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/1@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/2@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/3@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/4@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/5@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/6@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/7@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/8@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/9@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/up@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/down@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        # OAK-D Lite stereo camera
+        '/oakd/left/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
+        '/oakd/right/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
+        '/oakd/left/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+        '/oakd/right/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+        # OAK-D Lite IMU
+        '/oakd/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
+    ]
+
     gz_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        parameters=[{
-            'config_file': os.path.join(bringup_dir, 'config', 'gz_bridge.yaml'),
-        }],
+        arguments=bridge_args,
         output='screen',
     )
 
