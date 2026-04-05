@@ -17,4 +17,7 @@ ln -sf $REPO_DIR/worlds/truss2.sdf \
 ln -sf $REPO_DIR/airframes/4022_gz_x500_tof \
   $PX4_DIR/ROMFS/px4fmu_common/init.d-posix/airframes/4022_gz_x500_tof
 
-echo "Done."
+echo "Done. Symlinks created in $PX4_DIR"
+echo ""
+echo "To build the ROS2 workspace:"
+echo "  cd $REPO_DIR/ros2_ws && colcon build"

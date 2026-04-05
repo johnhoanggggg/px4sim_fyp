@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>px4_sim_bringup</name>
+  <version>0.1.0</version>
+  <description>Top-level bringup for PX4 SITL with ROS2, Gazebo bridge, SLAM, and avoidance</description>
+  <maintainer email="dev@example.com">dev</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>ros_gz_image</exec_depend>
+  <exec_depend>px4_msgs</exec_depend>
+  <exec_depend>px4_tof_avoidance</exec_depend>
+  <exec_depend>px4_vslam</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

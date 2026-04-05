@@ -1,0 +1,58 @@
+# RTAB-Map parameters for stereo VI-SLAM with OAK-D Lite
+#
+# Tuned for confined-space navigation (timber truss lattice).
+# Works with both Gazebo simulation and real OAK-D Lite hardware — the
+# depthai_ros driver publishes the same sensor_msgs topics.
+
+rtabmap:
+  ros__parameters:
+    subscribe_stereo: true
+    subscribe_odom_info: false
+    approx_sync: true
+    queue_size: 10
+
+    frame_id: 'base_link'
+    odom_frame_id: 'odom'
+    map_frame_id: 'map'
+
+    # Stereo topic remappings (set in launch file)
+    # left/image_rect → /oakd/left/image_raw
+    # right/image_rect → /oakd/right/image_raw
+    # left/camera_info → /oakd/left/camera_info
+    # right/camera_info → /oakd/right/camera_info
+
+    # IMU
+    imu_topic: '/oakd/imu'
+    wait_imu_to_init: true
+
+    # Detection rate — keep low to save CPU in sim
+    Rtabmap/DetectionRate: '2.0'
+
+    # Visual features
+    Vis/FeatureType: '6'         # ORB (fast, good for real-time)
+    Vis/MaxFeatures: '500'       # Limit for performance
+    Vis/MinInliers: '15'         # Minimum inliers for valid transform
+
+    # Stereo matching
+    Stereo/MaxDisparity: '128.0'
+    Stereo/MinDisparity: '1.0'
+
+    # Optimisation
+    RGBD/OptimizeMaxError: '3.0'   # Reject bad loop closures
+    RGBD/ProximityBySpace: 'true'
+    RGBD/AngularUpdate: '0.1'      # rad — minimum rotation to add node
+    RGBD/LinearUpdate: '0.1'       # m — minimum translation to add node
+
+    # Memory management
+    Mem/STMSize: '30'
+    Mem/RehearsalSimilarity: '0.6'
+
+    # Loop closure
+    Kp/MaxDepth: '8.0'
+    Kp/DetectorStrategy: '6'      # ORB
+
+    # Grid map (optional, for future Nav2 integration)
+    Grid/FromDepth: 'true'
+    Grid/RangeMax: '5.0'
+    Grid/CellSize: '0.1'
+    Grid/MinClusterSize: '20'

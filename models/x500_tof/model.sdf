@@ -197,5 +197,119 @@
     </link>
     <joint name="tof_down_joint" type="fixed"><parent>base_link</parent><child>tof_down_link</child></joint>
 
+    <!-- ===== OAK-D Lite Stereo Camera ===== -->
+    <!-- Left camera: 7.5cm baseline, mounted front-centre, facing forward -->
+    <!-- OAK-D Lite: 640x480, 73deg HFOV, 30fps, 7.5cm stereo baseline -->
+
+    <link name="oakd_left_link">
+      <pose relative_to="base_link">0.10 0.0375 -0.02 0 0 0</pose>
+      <inertial>
+        <mass>0.001</mass>
+        <inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+      </inertial>
+      <sensor name="oakd_left" type="camera">
+        <gz_frame_id>oakd_left_link</gz_frame_id>
+        <pose relative_to="base_link">0.10 0.0375 -0.02 0 0 0</pose>
+        <update_rate>30</update_rate>
+        <camera name="oakd_left">
+          <horizontal_fov>1.2741</horizontal_fov> <!-- 73 deg -->
+          <image>
+            <width>640</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip><near>0.1</near><far>50</far></clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.007</stddev>
+          </noise>
+          <lens>
+            <intrinsics>
+              <!-- fx = width / (2 * tan(hfov/2)) = 640 / (2 * tan(36.5deg)) = 432.0 -->
+              <fx>432.0</fx>
+              <fy>432.0</fy>
+              <cx>320.0</cx>
+              <cy>240.0</cy>
+              <s>0</s>
+            </intrinsics>
+          </lens>
+        </camera>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/oakd/left/image_raw</topic>
+      </sensor>
+    </link>
+    <joint name="oakd_left_joint" type="fixed"><parent>base_link</parent><child>oakd_left_link</child></joint>
+
+    <!-- Right camera: offset -7.5cm in Y from left -->
+    <link name="oakd_right_link">
+      <pose relative_to="base_link">0.10 -0.0375 -0.02 0 0 0</pose>
+      <inertial>
+        <mass>0.001</mass>
+        <inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+      </inertial>
+      <sensor name="oakd_right" type="camera">
+        <gz_frame_id>oakd_right_link</gz_frame_id>
+        <pose relative_to="base_link">0.10 -0.0375 -0.02 0 0 0</pose>
+        <update_rate>30</update_rate>
+        <camera name="oakd_right">
+          <horizontal_fov>1.2741</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip><near>0.1</near><far>50</far></clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.007</stddev>
+          </noise>
+          <lens>
+            <intrinsics>
+              <fx>432.0</fx>
+              <fy>432.0</fy>
+              <cx>320.0</cx>
+              <cy>240.0</cy>
+              <s>0</s>
+            </intrinsics>
+          </lens>
+        </camera>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <topic>/oakd/right/image_raw</topic>
+      </sensor>
+    </link>
+    <joint name="oakd_right_joint" type="fixed"><parent>base_link</parent><child>oakd_right_link</child></joint>
+
+    <!-- OAK-D Lite onboard IMU (BMI270) -->
+    <link name="oakd_imu_link">
+      <pose relative_to="base_link">0.10 0 -0.02 0 0 0</pose>
+      <inertial>
+        <mass>0.001</mass>
+        <inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+      </inertial>
+      <sensor name="oakd_imu" type="imu">
+        <gz_frame_id>oakd_imu_link</gz_frame_id>
+        <update_rate>200</update_rate>
+        <imu>
+          <angular_velocity>
+            <x><noise><type>gaussian</type><mean>0</mean><stddev>0.0003</stddev></noise></x>
+            <y><noise><type>gaussian</type><mean>0</mean><stddev>0.0003</stddev></noise></y>
+            <z><noise><type>gaussian</type><mean>0</mean><stddev>0.0003</stddev></noise></z>
+          </angular_velocity>
+          <linear_acceleration>
+            <x><noise><type>gaussian</type><mean>0</mean><stddev>0.003</stddev></noise></x>
+            <y><noise><type>gaussian</type><mean>0</mean><stddev>0.003</stddev></noise></y>
+            <z><noise><type>gaussian</type><mean>0</mean><stddev>0.003</stddev></noise></z>
+          </linear_acceleration>
+        </imu>
+        <always_on>1</always_on>
+        <topic>/oakd/imu</topic>
+      </sensor>
+    </link>
+    <joint name="oakd_imu_joint" type="fixed"><parent>base_link</parent><child>oakd_imu_link</child></joint>
+
   </model>
 </sdf>
