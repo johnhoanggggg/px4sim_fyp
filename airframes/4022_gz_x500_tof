@@ -1,8 +1,12 @@
 #!/bin/sh
 #
-# @name Gazebo x500 with front-facing ToF sensor
+# @name Gazebo Propguards with ToF sensor
 #
 # @type Quadrotor
 #
-PX4_SIM_MODEL=${PX4_SIM_MODEL:=x500_tof}
+
+# Change x500_tof to exactly match your new folder name
+PX4_SIM_MODEL=${PX4_SIM_MODEL:=propguards_tof}
+
+# Keep this line! It loads the base quadcopter flight dynamics and tuning
 . ${R}etc/init.d-posix/airframes/4001_gz_x500
