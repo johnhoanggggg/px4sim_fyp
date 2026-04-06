@@ -20,8 +20,8 @@ ln -sf $REPO_DIR/worlds/pillars.sdf \
 ln -sf $REPO_DIR/worlds/truss2.sdf \
   $PX4_DIR/Tools/simulation/gz/worlds/truss2.sdf
 
-ln -sf $REPO_DIR/airframes/4022_gz_propguards_tof \
-  $PX4_DIR/ROMFS/px4fmu_common/init.d-posix/airframes/4022_gz_propguards_tof
+ln -sf $REPO_DIR/airframes/4012_gz_propguards_tof \
+  $PX4_DIR/ROMFS/px4fmu_common/init.d-posix/airframes/4012_gz_propguards_tof
 
 echo "Done. Symlinks created in $PX4_DIR"
 echo ""

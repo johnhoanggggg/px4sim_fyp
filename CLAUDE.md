@@ -7,7 +7,7 @@ PX4 SITL Gazebo simulation for quadrotor corridor navigation with Time-of-Flight
 ```
 px4sim_fyp/
 ├── airframes/
-│   └── 4022_gz_propguards_tof   # Airframe config: sets PX4_SIM_MODEL=propguards_tof, sources 4001_gz_x500
+│   └── 4012_gz_propguards_tof   # Airframe config: sets PX4_SIM_MODEL=propguards_tof, sources 4001_gz_x500
 ├── models/
 │   ├── propguards/              # Base X500 with cylindrical prop guards (no sensors)
 │   │   ├── model.sdf            # mass=2.0kg, 4 guard cylinders, uses model://x500_base meshes
@@ -48,10 +48,11 @@ px4sim_fyp/
 `setup.sh` symlinks models, worlds, and airframes into `~/PX4-Autopilot/`:
 - `models/*` -> `~/PX4-Autopilot/Tools/simulation/gz/models/`
 - `worlds/*.sdf` -> `~/PX4-Autopilot/Tools/simulation/gz/worlds/`
-- `airframes/4022_gz_propguards_tof` -> `~/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/`
+- `airframes/4012_gz_propguards_tof` -> `~/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/`
 
 **Important**: PX4 CMake derives the make target name from the airframe filename (strips `NNNN_gz_` prefix).
-So `4022_gz_propguards_tof` -> make target `gz_propguards_tof` -> loads model `propguards_tof`.
+So `4012_gz_propguards_tof` -> make target `gz_propguards_tof` -> loads model `propguards_tof`.
+The airframe number (4012) must match the entry in PX4-Autopilot's `ROMFS/.../airframes/CMakeLists.txt`.
 
 ## Running the Simulation
 
