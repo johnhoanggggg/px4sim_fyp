@@ -246,10 +246,12 @@ class AvoidanceNode(Node):
 
         self._offboard_setpoint_count += 1
 
-        # After enough setpoints, switch to offboard mode and arm
-        if self._offboard_setpoint_count == self._OFFBOARD_THRESHOLD:
-            self._set_offboard_mode()
-            self._arm()
+        # After enough setpoints, keep retrying offboard mode and arm
+        if self._offboard_setpoint_count >= self._OFFBOARD_THRESHOLD:
+            if self._nav_state != 14:  # 14 = NAVIGATION_STATE_OFFBOARD
+                self._set_offboard_mode()
+            if not self._armed:
+                self._arm()
 
         if self._position_ned is None:
             return
