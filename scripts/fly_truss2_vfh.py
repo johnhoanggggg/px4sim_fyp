@@ -30,7 +30,7 @@ from viz2d import run_viz
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MAX_SPEED = 0.5          # max speed (m/s)
+MAX_SPEED = 0.3          # max speed (m/s)
 SAFE_DISTANCE = 1.0
 CONTROL_HZ = 10
 WAYPOINT_TOL = 0.6
@@ -39,10 +39,10 @@ VEL_SMOOTH = 0.3         # EMA alpha for velocity smoothing
 # Waypoints in NED (north, east, down, label)
 WAYPOINTS = [
     ( 0.0,   0.0,  -1.2,  "Takeoff south of structure"),
-    ( 3.0,   0.0,  -1.2,  "Approach structure low"),
+    # ( 3.0,   0.0,  -1.2,  "Approach structure low"),
     ( 5.9,   1.0,  -2.0,  "Bay 0-1: right side, below collar z=2.5"),
-    ( 7.7,   0.0,  -3.0,  "Bay 1-2: fly high, no collar on t1"),
-    ( 9.5,  -1.0,  -2.5,  "Bay 2-3: left, below t2 collar z=3.0"),
+    # ( 7.7,   0.0,  -3.0,  "Bay 1-2: fly high, no collar on t1"),
+    ( 9.5,  1.0,  -2.5,  "Bay 2-3: left, below t2 collar z=3.0"),
     (11.3,   1.0,  -2.5,  "Bay 3-4: right, avoid noggin x=-1.5"),
     (13.1,   0.0,  -3.2,  "Bay 4-5: high, no collar on t4"),
     (14.9,  -0.5,  -2.0,  "Bay 5-6: low, below t5 collar z=3.0"),
@@ -83,25 +83,25 @@ target_lock = threading.Lock()
 # ---------------------------------------------------------------------------
 tof = TofReader()
 vfh = VFH3D(
-    n_az = 72,
-    n_el = 18,
-    max_range = 1.5,
-    bubble_radius = 0.3,
-    safe_distance = 0.8,
-    max_speed = 0.6,
-    gap_weight_goal = 2.0,
-    gap_weight_width = 0.3,
-    min_gap_cells = 2,
-    min_gap_metres = 0.3,
-    edge_margin_deg = 8.0,
-    el_max_deg = 89.0,
-    heading_smooth = 0.4,
+    n_az= 72,
+    n_el= 18,
+    max_range= 1.5,
+    bubble_radius= 0.3,
+    safe_distance= 0.8,
+    max_speed= 0.5,
+    gap_weight_goal= 1.0,
+    gap_weight_width= 5,
+    min_gap_cells= 10,
+    min_gap_metres= 0.8,
+    edge_margin_deg= 35.0,
+    el_max_deg= 89.0,
+    heading_smooth= 0.4,
     # VFH-specific
-    density_a = 5.0,
-    density_b = 2.5,
-    threshold_high = 3.0,
-    threshold_low = 1.5,
-    cost_smooth = 1.0,
+    density_a= 3.0,
+    density_b= 2,
+    threshold_high= 2.5,
+    threshold_low= 1.5,
+    cost_smooth= 0.5,
 )
 
 # Visualizer (separate process)
