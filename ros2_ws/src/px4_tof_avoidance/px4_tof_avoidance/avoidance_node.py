@@ -144,7 +144,7 @@ class AvoidanceNode(Node):
         self._armed = False
         self._nav_state = 0
         self._offboard_setpoint_count = 0
-        self._OFFBOARD_THRESHOLD = 20  # send N setpoints before switching
+        self._OFFBOARD_THRESHOLD = 40  # stream ~4s of setpoints before switching
 
         # Waypoints
         self._waypoints = DEFAULT_WAYPOINTS
@@ -224,7 +224,8 @@ class AvoidanceNode(Node):
 
     def _arm(self):
         self._send_command(
-            VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM, param1=1.0)
+            VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM,
+            param1=1.0, param2=21196.0)  # 21196 = force arm (bypass preflight)
         self.get_logger().info('Arm command sent')
 
     def _set_offboard_mode(self):
@@ -246,11 +247,12 @@ class AvoidanceNode(Node):
 
         self._offboard_setpoint_count += 1
 
-        # After enough setpoints, keep retrying offboard mode and arm
+        # After enough setpoints, switch to offboard first, then arm
         if self._offboard_setpoint_count >= self._OFFBOARD_THRESHOLD:
             if self._nav_state != 14:  # 14 = NAVIGATION_STATE_OFFBOARD
                 self._set_offboard_mode()
-            if not self._armed:
+            elif not self._armed:
+                # Only arm after offboard mode is confirmed
                 self._arm()
 
         if self._position_ned is None:
