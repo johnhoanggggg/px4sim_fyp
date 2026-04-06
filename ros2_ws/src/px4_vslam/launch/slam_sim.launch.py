@@ -58,6 +58,16 @@ def generate_launch_description():
         ],
     )
 
+    # Stereo baseline fixer: injects Tx into right camera_info
+    # Gazebo bridge doesn't set P[3] (Tx = -fx * baseline) needed by RTAB-Map
+    baseline_fixer = Node(
+        package='px4_vslam',
+        executable='stereo_baseline_fixer',
+        name='stereo_baseline_fixer',
+        parameters=[{'baseline': 0.075, 'fx': 432.0}],
+        output='screen',
+    )
+
     # RTAB-Map stereo odometry
     rtabmap_odom = Node(
         package='rtabmap_odom',
@@ -65,13 +75,13 @@ def generate_launch_description():
         name='rtabmap_odom',
         parameters=[
             config_file,
-            {'approx_sync': True},  # Left/right may have slightly different timestamps
+            {'approx_sync': True},
         ],
         remappings=[
             ('left/image_rect', '/oakd/left/image_raw'),
             ('right/image_rect', '/oakd/right/image_raw'),
             ('left/camera_info', '/oakd/left/camera_info'),
-            ('right/camera_info', '/oakd/right/camera_info'),
+            ('right/camera_info', '/oakd/right/camera_info_fixed'),
             ('imu', '/oakd/imu'),
         ],
         output='screen',
@@ -90,7 +100,7 @@ def generate_launch_description():
             ('left/image_rect', '/oakd/left/image_raw'),
             ('right/image_rect', '/oakd/right/image_raw'),
             ('left/camera_info', '/oakd/left/camera_info'),
-            ('right/camera_info', '/oakd/right/camera_info'),
+            ('right/camera_info', '/oakd/right/camera_info_fixed'),
             ('imu', '/oakd/imu'),
         ],
         output='screen',
@@ -109,6 +119,7 @@ def generate_launch_description():
         tf_left,
         tf_right,
         tf_imu,
+        baseline_fixer,
         rtabmap_odom,
         rtabmap_slam,
         slam_bridge,

@@ -18,6 +18,7 @@ setup(
     entry_points={
         'console_scripts': [
             'slam_bridge = px4_vslam.slam_bridge_node:main',
+            'stereo_baseline_fixer = px4_vslam.stereo_baseline_fixer:main',
         ],
     },
 )
