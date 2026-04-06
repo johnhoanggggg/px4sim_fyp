@@ -24,7 +24,7 @@ import numpy as np
 from pymavlink import mavutil
 
 from tof_reader import TofReader
-from vfh3d import VFH3D
+from vfh3d2 import VFH3D
 from viz2d import run_viz
 
 # ---------------------------------------------------------------------------
@@ -83,19 +83,25 @@ target_lock = threading.Lock()
 # ---------------------------------------------------------------------------
 tof = TofReader()
 vfh = VFH3D(
-    n_az=72,
-    n_el=18,
-    max_range=2.0,
-    bubble_radius=0.35,
-    safe_distance=SAFE_DISTANCE,
-    max_speed=MAX_SPEED,
-    w_goal=1.0,
-    w_obstacle=3.0,
-    w_smooth=0.3,
-    w_reverse=0.8,
-    safety_margin_cells=2,
-    clearance_radius_cells=3,
-    el_max_deg=90.0,
+    n_az = 72,
+    n_el = 18,
+    max_range = 1.5,
+    bubble_radius = 0.3,
+    safe_distance = 0.8,
+    max_speed = 0.6,
+    gap_weight_goal = 2.0,
+    gap_weight_width = 0.3,
+    min_gap_cells = 2,
+    min_gap_metres = 0.3,
+    edge_margin_deg = 8.0,
+    el_max_deg = 89.0,
+    heading_smooth = 0.4,
+    # VFH-specific
+    density_a = 5.0,
+    density_b = 2.5,
+    threshold_high = 3.0,
+    threshold_low = 1.5,
+    cost_smooth = 1.0,
 )
 
 # Visualizer (separate process)
