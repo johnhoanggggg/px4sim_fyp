@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-Offboard control with bidirectional 3-D DWA obstacle avoidance through
-a multi-layer roof truss lattice.
+Offboard control with 3-D VFH (Vector Field Histogram) obstacle avoidance
+through a multi-layer roof truss lattice.
 
-DWA3D scores all directions on a spherical grid with a weighted cost
-function and can back out of tight spaces.
+VFH3D scores all candidate directions on a spherical grid with a weighted
+cost function that naturally steers through gap centres (away from obstacle
+boundaries), avoiding the "heading too close to obstacles" problem.
 
 Usage:
     1. Start PX4 SITL:
          cd ~/PX4-Autopilot && PX4_GZ_WORLD=truss2 make px4_sitl gz_x500_tof
     2. Run this script:
-         python3 fly_truss2_dwa.py
+         python3 fly_truss2_vfh_yaw.py
 """
 
 import time
@@ -23,7 +24,7 @@ import numpy as np
 from pymavlink import mavutil
 
 from tof_reader import TofReader
-from dwa3d import DWA3D
+from vfh3dyaw import VFH3D
 from viz2d import run_viz
 
 # ---------------------------------------------------------------------------
@@ -32,24 +33,20 @@ from viz2d import run_viz
 MAX_SPEED = 0.5          # max speed (m/s)
 SAFE_DISTANCE = 1.0
 CONTROL_HZ = 10
-WAYPOINT_TOL = 0.4
-VEL_SMOOTH = 0.3         # EMA alpha for velocity smoothing
+WAYPOINT_TOL = 0.6
+VEL_SMOOTH = 0.7         # EMA alpha for velocity smoothing
+YAW_SMOOTH = 0.7        # EMA alpha for yaw (lower = smoother but slightly delayed)
 
 # Waypoints in NED (north, east, down, label)
-#
-# Structure (ENU): 7 pitched timber trusses running E-W at y=5,6.8..15.8
-#   Span x=-3.5..3.5, bottom chord z=1.5, peak z=3.5
-#   Collar ties: t0(z=2.5), t2(z=3.0), t3(z=2.5), t5(z=3.0), t6(z=2.5)
-#   Drone spawns at ENU (0,0) = 5 m south of first truss.
-#   NED: north=enu_y, east=enu_x, down=-enu_z
 WAYPOINTS = [
-    ( 0.0,   0.0,  -2,  "Takeoff south of structure"),
+    ( 0.0,   0.0,  -1.2,  "Takeoff south of structure"),
+    ( 3.0,   0.0,  -1.2,  "Approach structure low"),
     ( 5.9,   1.0,  -2.0,  "Bay 0-1: right side, below collar z=2.5"),
-    # ( 7.7,   0.0,  -3.0,  "Bay 1-2: fly high, no collar on t1"),
+    ( 7.7,   0.0,  -3.0,  "Bay 1-2: fly high, no collar on t1"),
     ( 9.5,  -1.0,  -2.5,  "Bay 2-3: left, below t2 collar z=3.0"),
-    # (11.3,   1.0,  -2.5,  "Bay 3-4: right, avoid noggin x=-1.5"),
+    (11.3,   1.0,  -2.5,  "Bay 3-4: right, avoid noggin x=-1.5"),
     (13.1,   0.0,  -3.2,  "Bay 4-5: high, no collar on t4"),
-    # (14.9,  -0.5,  -2.0,  "Bay 5-6: low, below t5 collar z=3.0"),
+    (14.9,  -0.5,  -2.0,  "Bay 5-6: low, below t5 collar z=3.0"),
     (16.5,   0.0,  -2.5,  "Exit north"),
     (10.4,   0.0,  -4.0,  "Return high over structure"),
     ( 0.0,   0.0,  -1.2,  "Home"),
@@ -86,24 +83,31 @@ target_lock = threading.Lock()
 # Modules
 # ---------------------------------------------------------------------------
 tof = TofReader()
-fgm = DWA3D(
-    n_az=72,
-    n_el=18,
-    max_range=1.5,
-    bubble_radius=0.1,
-    safe_distance=SAFE_DISTANCE,
-    max_speed=MAX_SPEED,
-    w_goal=1,
-    w_obstacle=0.05,
-    w_smooth=0.3,
-    safety_margin_cells= 1,
-    clearance_radius_cells= 2,
-    w_reverse=0.01,
-    el_max_deg=90.0,
-    w_el_repulsion= 1,
+
+# Updated VFH Parameters to fix truss clipping & grid resolution
+vfh = VFH3D(
+    n_az= 72,
+    n_el= 18,
+    max_range= 1.5,
+    bubble_radius= 0.3,
+    safe_distance= 0.8,
+    max_speed= 0.5,
+    gap_weight_goal= 2.0,
+    gap_weight_width= 1,
+    min_gap_cells= 2,
+    min_gap_metres= 0.8,
+    edge_margin_deg= 20.0,
+    el_max_deg= 89.0,
+    heading_smooth= 0.4,
+    # VFH-specific
+    density_a= 4.0,
+    density_b= 2.5,
+    threshold_high= 3.0,
+    threshold_low= 1.5,
+    cost_smooth= 1.0,
 )
 
-# Visualizer (separate process) — reuses the 2-D top-down view
+# Visualizer (separate process)
 viz_queue: mp.Queue = mp.Queue(maxsize=5)
 viz_proc = mp.Process(target=run_viz, args=(viz_queue,), daemon=True)
 viz_proc.start()
@@ -121,6 +125,7 @@ def set_pos(x, y, z, yaw=0):
 
 
 def set_vel(vx, vy, vz, yaw=0.0):
+    # Mask is configured to USE velocity (bits 3,4,5 = 0) and USE yaw target (bit 10 = 0)
     type_mask = 0b0000_1001_1100_0111
     send.mav.set_position_target_local_ned_send(
         0, TARGET_SYS, TARGET_COMP,
@@ -203,21 +208,24 @@ def wait_until_reached(x, y, z, tolerance=WAYPOINT_TOL, timeout=15):
     return False
 
 
-# Truss member positions in NED for visualizer (king posts + web verticals)
-# ENU (x,y) → NED (north=y, east=x)
+# Truss member positions in NED for visualizer
 _TRUSS_Y_VALS = (5.0, 6.8, 8.6, 10.4, 12.2, 14.0, 15.8)
 _COL_POSITIONS_NED = []
 for _y in _TRUSS_Y_VALS:
-    _COL_POSITIONS_NED.append((_y, 0))        # king post
-    _COL_POSITIONS_NED.append((_y, -1.75))    # left web vertical
-    _COL_POSITIONS_NED.append((_y, 1.75))     # right web vertical
+    _COL_POSITIONS_NED.append((_y, 0))
+    _COL_POSITIONS_NED.append((_y, -1.75))
+    _COL_POSITIONS_NED.append((_y, 1.75))
 
 
-def _push_viz(drone_n, drone_e, yaw, current_wp_idx):
+def _push_viz(drone_n, drone_e, yaw, current_wp_idx,
+              vel_body=None, min_obs=None, n_obs=0, wp_dist=0.0, wp_label=""):
     """Send state to visualizer (non-blocking)."""
-    bins = fgm.get_histogram()
-    chosen = fgm.get_chosen_direction()
+    bins = vfh.get_histogram()
+    chosen = vfh.get_chosen_direction()
     wps_ne = [(w[0], w[1]) for w in WAYPOINTS]
+    speed = 0.0
+    if vel_body is not None:
+        speed = float(np.sqrt(vel_body[0]**2 + vel_body[1]**2 + vel_body[2]**2))
     pkt = {
         "drone_n": drone_n,
         "drone_e": drone_e,
@@ -228,7 +236,14 @@ def _push_viz(drone_n, drone_e, yaw, current_wp_idx):
         "current_wp": current_wp_idx,
         "obstacles": _COL_POSITIONS_NED,
         "obstacle_radius": 0.08,
-        "sphere": fgm.get_sphere_data(),
+        "sphere": vfh.get_sphere_data(),
+        "metrics": {
+            "speed": speed,
+            "min_obs": float(min_obs) if min_obs is not None else float('inf'),
+            "n_obs": n_obs,
+            "wp_dist": wp_dist,
+            "wp_label": wp_label,
+        },
     }
     try:
         viz_queue.put_nowait(pkt)
@@ -237,15 +252,16 @@ def _push_viz(drone_n, drone_e, yaw, current_wp_idx):
 
 
 def fly_with_avoidance(waypoints, wp_offset=0):
-    """Navigate waypoints using 3-D FGM obstacle avoidance."""
+    """Navigate waypoints using 3-D VFH obstacle avoidance."""
     global use_pos_setpoints
     use_pos_setpoints = False
 
-    prev_vel_ned = (0.0, 0.0, 0.0)   # for EMA smoothing (vx, vy, vz)
+    prev_vel_ned = (0.0, 0.0, 0.0)
+    prev_yaw_target = None           # <--- CORRECTLY PLACED HERE
 
     for i, (wx, wy, wz, label) in enumerate(waypoints):
         wp_idx = i + wp_offset
-        print(f"\n>>> [{wp_idx+1}/{len(WAYPOINTS)}] {label}  (DWA3D)")
+        print(f"\n>>> [{wp_idx+1}/{len(WAYPOINTS)}] {label}  (VFH3D)")
         t0 = time.time()
 
         while time.time() - t0 < 60:
@@ -265,29 +281,48 @@ def fly_with_avoidance(waypoints, wp_offset=0):
             goal_ned = (wx - px, wy - py, wz - pz)
             frd_x =  c_yaw * goal_ned[0] + s_yaw * goal_ned[1]
             frd_y = -s_yaw * goal_ned[0] + c_yaw * goal_ned[1]
-            goal_body = (frd_x, -frd_y, -goal_ned[2])  # FRD→FLU: negate y; NED_down→FLU_up: negate z
+            goal_body = (frd_x, -frd_y, -goal_ned[2])
 
             # Obstacles
             pts = tof.get_obstacle_points(max_range=2.0)
 
-            # DWA3D — handles both obstacle and no-obstacle cases
-            vel_body = fgm.update(pts, goal_body)
+            # VFH3D -> Returns (vx, vy, vz, yaw)
+            vel_body = vfh.update(pts, goal_body)
+            body_yaw = vel_body[3]
+
+            # Calculate target absolute NED yaw
+            target_abs_yaw = yaw - body_yaw
+            target_abs_yaw = (target_abs_yaw + math.pi) % (2 * math.pi) - math.pi
+
+            # --- YAW SMOOTHING ---
+            if prev_yaw_target is None:
+                prev_yaw_target = yaw  # Initialize to current drone yaw
+
+            # Shortest-path angular difference
+            yaw_diff = (target_abs_yaw - prev_yaw_target + math.pi) % (2 * math.pi) - math.pi
+            
+            # Apply EMA
+            smoothed_yaw = prev_yaw_target + YAW_SMOOTH * yaw_diff
+            smoothed_yaw = (smoothed_yaw + math.pi) % (2 * math.pi) - math.pi
+            
+            prev_yaw_target = smoothed_yaw
+            # ---------------------
 
             # Body FLU → NED
             frd_vx = vel_body[0]
-            frd_vy = -vel_body[1]  # FLU→FRD
+            frd_vy = -vel_body[1]
             raw_vn = c_yaw * frd_vx - s_yaw * frd_vy
             raw_ve = s_yaw * frd_vx + c_yaw * frd_vy
-            raw_vd = -vel_body[2]  # FLU up → NED down
+            raw_vd = -vel_body[2]
 
-            # Hard height ceiling: don't climb above waypoint altitude
-            alt_error = pz - wz  # negative = drone above target
+            # Hard height ceiling
+            alt_error = pz - wz
             if alt_error < -0.3:
                 raw_vd = max(raw_vd, 0.5)
             elif alt_error < 0:
                 raw_vd = max(raw_vd, 0.0)
 
-            # EMA smoothing (all axes)
+            # EMA smoothing
             a = VEL_SMOOTH
             vel_ned = (
                 a * raw_vn + (1 - a) * prev_vel_ned[0],
@@ -297,27 +332,32 @@ def fly_with_avoidance(waypoints, wp_offset=0):
             prev_vel_ned = vel_ned
 
             try:
-                set_vel(vel_ned[0], vel_ned[1], vel_ned[2])
+                # Pass the smoothed yaw to the flight controller
+                set_vel(vel_ned[0], vel_ned[1], vel_ned[2], yaw=smoothed_yaw)
             except Exception:
                 pass
-
-            _push_viz(px, py, yaw, wp_idx)
 
             min_obs = float('inf')
             if len(pts) > 0:
                 min_obs = float(np.min(np.sqrt(pts[:, 0]**2 + pts[:, 1]**2 + pts[:, 2]**2)))
+
+            _push_viz(px, py, yaw, wp_idx,
+                      vel_body=vel_body, min_obs=min_obs,
+                      n_obs=len(pts), wp_dist=dist, wp_label=label)
+
             print(f"  pos:({px:.2f},{py:.2f},{-pz:.2f}m) d:{dist:.2f} "
                   f"vel:({vel_ned[0]:.2f},{vel_ned[1]:.2f},vz:{-vel_ned[2]:.2f}) "
+                  f"yaw_tgt:{math.degrees(smoothed_yaw):.0f}° "
                   f"obs:{len(pts)} min:{min_obs:.2f}")
 
             time.sleep(1.0 / CONTROL_HZ)
 
-        # Hold at waypoint (clamp altitude — never hold above waypoint)
+        # Hold at waypoint
         use_pos_setpoints = True
         pos = get_position()
-        hold_z = wz if not pos else max(pos[2], wz)  # max because NED down: more negative = higher
-        set_target(wx, wy, hold_z)
-        _push_viz(wx, wy, yaw, wp_idx)
+        hold_z = wz if not pos else max(pos[2], wz)
+        set_target(wx, wy, hold_z, yaw=yaw)  # Hold current yaw
+        _push_viz(wx, wy, yaw, wp_idx, wp_label=label)
         print(f"  Holding 2s...")
         time.sleep(2)
         use_pos_setpoints = False
@@ -403,9 +443,9 @@ try:
     set_target(0, 0, -1.2)
     wait_until_reached(0, 0, -1.2, tolerance=0.4, timeout=15)
 
-    # Fly through truss lattice with 3-D FGM
-    print(f"\nEnabling 3-D FGM obstacle avoidance (bubble={fgm.bubble_radius}m)...")
-    fgm.reset()
+    # Fly through truss lattice with 3-D VFH
+    print(f"\nEnabling 3-D VFH obstacle avoidance (bubble={vfh.bubble_radius}m)...")
+    vfh.reset()
     fly_with_avoidance(WAYPOINTS[1:], wp_offset=1)
 
     land_and_disarm()

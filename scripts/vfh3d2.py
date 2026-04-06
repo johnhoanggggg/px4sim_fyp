@@ -1,119 +1,119 @@
 #!/usr/bin/env python3
 """
-FGM3D — True 3-D Follow-the-Gap Method on a spherical scan.
+VFH3D — 3-D Vector Field Histogram on a spherical scan.
 
-Instead of separating horizontal and vertical avoidance, this projects all
-obstacle points onto a unit sphere (azimuth + elevation), builds a 2-D
-blocked/free map, finds 3-D gaps, and steers toward the best gap closest
-to the goal direction.  The output is a full (vx, vy, vz) velocity in
-body FLU frame.
+Drop-in replacement for FGM3D.  Uses the classic VFH+ approach extended
+to 3-D:
 
-Sphere discretisation:
-    - n_az   azimuth bins   covering [-pi, pi)      (horizontal)
-    - n_el   elevation bins covering [-el_max, el_max] (vertical)
-    Each cell is a small solid-angle patch.  Obstacle points that fall
-    within max_range are projected onto cells and mark them blocked
-    (with bubble inflation).  Contiguous free regions are found via
-    flood-fill, scored by proximity to the goal direction, and the
-    best steering direction is picked.
+  1. Build a **polar obstacle density** histogram on a (azimuth × elevation)
+     spherical grid.  Each obstacle point votes into nearby cells weighted
+     by inverse-square distance (closer obstacles → higher density).
+
+  2. **Threshold** the density map into blocked / free using adaptive
+     hysteresis (low/high thresholds to prevent chattering).
+
+  3. Identify **candidate valleys** — contiguous free regions on the grid
+     via connected-component flood fill (same topology as FGM3D gaps).
+
+  4. **Cost-function selection** — score each valley by:
+       • angular distance from the valley's best steering cell to goal
+       • angular distance from current heading (smooth transitions)
+       • valley width bonus (prefer wide openings)
+     Pick the lowest-cost valley; steer toward its best cell.
+
+  5. Speed is modulated by proximity to the nearest obstacle.
+
+The API is identical to FGM3D so the flight script needs only to swap
+the import.
+
+Sphere discretisation matches FGM3D:
+    - n_az   azimuth bins   covering [-π, π)
+    - n_el   elevation bins covering [-el_max, el_max]
+
+Sensor coverage mask is reused from fgm3d module.
 """
 
 import math
 import numpy as np
 
+# Reuse the sensor coverage builder from the existing codebase
+from fgm3d import _build_coverage_mask
+
 # -----------------------------------------------------------------------
-# Sensor geometry (matches x500_tof model.sdf / tof_reader.py)
+# Helpers
 # -----------------------------------------------------------------------
-_FOV_HALF = 0.3927  # ±22.5 deg per sensor axis
 
-# 8 horizontal sensors (was 10; tof_4 and tof_6 moved to tilted)
-_HORIZONTAL_YAWS = [
-    0.0, 0.6283, 1.2566, 1.8850,
-    3.1416, -1.8850, -1.2566, -0.6283,
-]
-# 4 pitched/vertical sensors: forward-up 45°, forward-down 45°, up, down
-_VERTICAL_PITCHES = [-math.pi / 4, math.pi / 4, -math.pi / 2, math.pi / 2]
+def _wrap(a: float) -> float:
+    """Wrap angle to [-π, π)."""
+    return (a + math.pi) % (2 * math.pi) - math.pi
 
 
-def _build_coverage_mask(az_centres, el_centres, az_res, el_res, n_az, n_el):
-    """Compute a boolean mask of which (el, az) cells are covered by sensors.
+def _angular_dist_sphere(az1, el1, az2, el2):
+    """Great-circle angular distance between two spherical directions."""
+    d1 = np.array([math.cos(el1)*math.cos(az1),
+                    math.cos(el1)*math.sin(az1),
+                    math.sin(el1)])
+    d2 = np.array([math.cos(el2)*math.cos(az2),
+                    math.cos(el2)*math.sin(az2),
+                    math.sin(el2)])
+    dot = float(np.clip(np.dot(d1, d2), -1.0, 1.0))
+    return math.acos(dot)
 
-    For each sensor, projects every cell direction into the sensor's local
-    frame and checks whether it falls within the rectangular ±FOV_HALF
-    field of view.  This is exact and avoids gaps caused by discrete ray
-    sampling when the ray spacing exceeds the grid bin width.
+
+# -----------------------------------------------------------------------
+# VFH3D
+# -----------------------------------------------------------------------
+
+class VFH3D:
     """
-    coverage = np.zeros((n_el, n_az), dtype=bool)
+    3-D Vector Field Histogram obstacle avoidance planner.
 
-    # Precompute unit direction for each grid cell (n_el, n_az, 3)
-    az_grid, el_grid = np.meshgrid(az_centres, el_centres)
-    cos_el = np.cos(el_grid)
-    cell_dirs = np.stack([
-        cos_el * np.cos(az_grid),
-        cos_el * np.sin(az_grid),
-        np.sin(el_grid),
-    ], axis=-1)
-
-    def _rotz(yaw):
-        c, s = math.cos(yaw), math.sin(yaw)
-        return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
-
-    def _roty(pitch):
-        c, s = math.cos(pitch), math.sin(pitch)
-        return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
-
-    def _mark(rot):
-        # Project all cell directions into sensor-local frame
-        R_inv = rot.T
-        local = np.einsum('ij,mnj->mni', R_inv, cell_dirs)  # (n_el, n_az, 3)
-        lx = local[..., 0]
-        ly = local[..., 1]
-        lz = local[..., 2]
-        # Cell is covered if in front of sensor and within rectangular FOV
-        ha = np.arctan2(ly, lx)
-        va = np.arctan2(lz, np.sqrt(lx**2 + ly**2))
-        within = (lx > 0) & (np.abs(ha) <= _FOV_HALF) & (np.abs(va) <= _FOV_HALF)
-        coverage[within] = True
-
-    for yaw in _HORIZONTAL_YAWS:
-        _mark(_rotz(yaw))
-    for pitch in _VERTICAL_PITCHES:
-        _mark(_roty(pitch))
-
-    return coverage
-
-
-class FGM3D:
-    """
-    True 3-D Follow-the-Gap planner on a spherical scan.
+    Drop-in replacement for FGM3D — identical constructor signature,
+    public methods, and return types.
 
     Parameters
     ----------
     n_az : int
-        Azimuth bins (horizontal, default 72 = 5 deg each).
+        Azimuth bins (horizontal, default 72 = 5° each).
     n_el : int
-        Elevation bins (vertical, default 18 = ~10 deg each for ±90 deg).
+        Elevation bins (vertical, default 18).
     max_range : float
         Sensing range (m).
     bubble_radius : float
-        Safety inflation around obstacles (m), >= drone radius.
+        Safety inflation around obstacles (m).
     safe_distance : float
         Distance below which speed is reduced.
     max_speed : float
         Maximum output speed (m/s).
     gap_weight_goal : float
-        Weight for angular distance from steering point to goal.
+        Cost weight for angular distance to goal.
     gap_weight_width : float
-        Bonus for larger gap regions.
+        Bonus weight for wider valleys.
     min_gap_cells : int
-        Minimum number of contiguous free cells to count as a gap.
+        Minimum contiguous free cells to count as a valley.
     min_gap_metres : float
-        Minimum physical gap width (m).  Gaps whose angular span at
-        the local obstacle range is narrower than this get rejected.
+        Minimum physical valley width (m).
     edge_margin_deg : float
-        Pull steering point inward from gap boundary (deg).
+        Pull steering inward from valley boundary (deg).
     el_max_deg : float
-        Maximum elevation angle (deg).  90 = full hemisphere up/down.
+        Maximum elevation angle (deg).
+    heading_smooth : float
+        EMA alpha for heading smoothing (0=full smooth, 1=instant).
+
+    VFH-specific parameters
+    -----------------------
+    density_a : float
+        Obstacle density weight  a − b·d  coefficient (constant part).
+        Higher → obstacles produce more density.
+    density_b : float
+        Obstacle density weight  a − b·d  coefficient (distance part).
+        Higher → density falls off faster with range.
+    threshold_high : float
+        Density above which a cell becomes blocked.
+    threshold_low : float
+        Density below which a blocked cell becomes free (hysteresis).
+    cost_smooth : float
+        Cost weight for angular distance from previous heading.
     """
 
     def __init__(
@@ -131,6 +131,12 @@ class FGM3D:
         edge_margin_deg: float = 8.0,
         el_max_deg: float = 70.0,
         heading_smooth: float = 0.4,
+        # VFH-specific
+        density_a: float = 5.0,
+        density_b: float = 2.5,
+        threshold_high: float = 3.0,
+        threshold_low: float = 1.5,
+        cost_smooth: float = 1.0,
     ):
         self.n_az = n_az
         self.n_el = n_el
@@ -146,7 +152,14 @@ class FGM3D:
         self.el_max = math.radians(el_max_deg)
         self._heading_smooth = heading_smooth
 
-        # Azimuth bin centres [-pi, pi)
+        # VFH density params
+        self._density_a = density_a
+        self._density_b = density_b
+        self._thresh_high = threshold_high
+        self._thresh_low = threshold_low
+        self._cost_smooth = cost_smooth
+
+        # Azimuth bin centres [-π, π)
         self._az_res = 2 * math.pi / n_az
         self._az_centres = np.array(
             [-math.pi + (i + 0.5) * self._az_res for i in range(n_az)]
@@ -158,7 +171,7 @@ class FGM3D:
             [-self.el_max + (i + 0.5) * self._el_res for i in range(n_el)]
         )
 
-        # Pre-compute unit direction for each cell (n_el, n_az, 3)
+        # Unit direction for each cell (n_el, n_az, 3)
         az_grid, el_grid = np.meshgrid(self._az_centres, self._el_centres)
         cos_el = np.cos(el_grid)
         self._cell_dirs = np.stack([
@@ -167,25 +180,26 @@ class FGM3D:
             np.sin(el_grid),            # Z (up)
         ], axis=-1)
 
-        # Sensor coverage mask — True where at least one sensor ray falls
+        # Sensor coverage mask
         self._coverage = _build_coverage_mask(
             self._az_centres, self._el_centres,
             self._az_res, self._el_res, n_az, n_el,
         )
 
-        # State
+        # ---- State ----
+        self._density = np.zeros((n_el, n_az), dtype=float)
         self._blocked = np.zeros((n_el, n_az), dtype=bool)
         self._range_map = np.full((n_el, n_az), max_range)
         self._last_chosen_az: float | None = None
         self._last_chosen_el: float | None = None
-        self._last_gaps: list = []
+        self._last_valleys: list = []
 
-        # Stuck detection
+        # Stuck detection (matches FGM3D behaviour)
         self._stuck_counter = 0
         self._prev_goal_dist = float('inf')
 
     # ------------------------------------------------------------------
-    # Public API
+    # Public API (identical to FGM3D)
     # ------------------------------------------------------------------
 
     def update(self, obstacle_pts: np.ndarray, goal_body: tuple) -> tuple:
@@ -205,33 +219,32 @@ class FGM3D:
 
         goal_dist = math.sqrt(gx**2 + gy**2 + gz**2)
         goal_az = math.atan2(gy, gx)
-        goal_el = math.atan2(gz, math.sqrt(gx**2 + gy**2)) if goal_dist > 0.01 else 0.0
+        goal_el = (math.atan2(gz, math.sqrt(gx**2 + gy**2))
+                   if goal_dist > 0.01 else 0.0)
 
-        # 1. Build spherical range map and blocked mask
-        self._build_map(obstacle_pts)
+        # 1. Build density histogram and threshold into blocked map
+        self._build_density_map(obstacle_pts)
+        self._apply_threshold()
 
-        # 2. Find min obstacle distances
-        min_obs_dist = float('inf')       # all directions (for speed scaling)
-        min_fwd_obs_dist = float('inf')   # forward hemisphere (for retreat)
+        # 2. Min obstacle distances
+        min_obs_dist = float('inf')
+        min_fwd_obs_dist = float('inf')
         if len(obstacle_pts) > 0:
             dists = np.sqrt(np.sum(obstacle_pts**2, axis=1))
             valid = dists > 0.0001
             if np.any(valid):
                 min_obs_dist = float(np.min(dists[valid]))
-                # Forward hemisphere: obstacle X > 0 in body FLU (ahead of drone)
                 fwd = valid & (obstacle_pts[:, 0] > 0)
                 if np.any(fwd):
                     min_fwd_obs_dist = float(np.min(dists[fwd]))
 
-        # 3. Stuck detection: if not making progress toward goal, retreat
+        # 3. Stuck detection
         if goal_dist < self._prev_goal_dist - 0.05:
             self._stuck_counter = 0
         else:
             self._stuck_counter += 1
         self._prev_goal_dist = goal_dist
 
-        # Force retreat if stuck too long or forward obstacle within bubble radius.
-        # Only forward obstacles trigger retreat — side beams in truss gaps don't.
         if self._stuck_counter > 20 or min_fwd_obs_dist < self._bubble_radius:
             self._last_chosen_az = None
             self._last_chosen_el = None
@@ -239,33 +252,33 @@ class FGM3D:
                 self._stuck_counter = 0
             return self._retreat(obstacle_pts, min_obs_dist)
 
-        # 4. Find gaps via connected-component flood fill
-        gaps = self._find_gaps()
-        self._last_gaps = gaps
+        # 4. Find candidate valleys (connected free regions)
+        valleys = self._find_valleys()
+        self._last_valleys = valleys
 
-        # 5. No passable gap → back away from nearest obstacle
-        if not gaps:
+        # 5. No valley → retreat
+        if not valleys:
             self._last_chosen_az = None
             self._last_chosen_el = None
             return self._retreat(obstacle_pts, min_obs_dist)
 
-        # 6. Pick best gap and steering direction
-        best_az, best_el = self._select_gap(gaps, goal_az, goal_el)
+        # 6. Cost-function valley selection
+        best_az, best_el = self._select_valley(valleys, goal_az, goal_el)
 
-        # 7. Heading smoothing — angular EMA with shortest-arc interpolation
+        # 7. Heading smoothing (angular EMA with shortest-arc)
         if self._last_chosen_az is not None and self._heading_smooth < 1.0:
             alpha = self._heading_smooth
-            delta_az = (best_az - self._last_chosen_az + math.pi) % (2 * math.pi) - math.pi
+            delta_az = _wrap(best_az - self._last_chosen_az)
             best_az = self._last_chosen_az + alpha * delta_az
             best_el = (1 - alpha) * self._last_chosen_el + alpha * best_el
 
         self._last_chosen_az = best_az
         self._last_chosen_el = best_el
 
-        # 8. Compute speed (slow near obstacles)
+        # 8. Speed modulation
         speed = self._compute_speed(min_obs_dist)
 
-        # 9. Convert spherical steering direction to Cartesian velocity
+        # 9. Spherical → Cartesian velocity
         cos_el = math.cos(best_el)
         vx = speed * cos_el * math.cos(best_az)
         vy = speed * cos_el * math.sin(best_az)
@@ -274,12 +287,7 @@ class FGM3D:
         return (vx, vy, vz)
 
     def get_histogram(self) -> list[tuple[float, bool]]:
-        """Return horizontal-slice histogram for viz2d compatibility.
-
-        Projects the spherical blocked map onto the azimuth axis:
-        a ray is blocked if ANY elevation bin at that azimuth is blocked.
-        """
-        # Use the elevation band near horizontal (middle rows)
+        """Horizontal-slice histogram for viz2d compatibility."""
         mid = self.n_el // 2
         band = max(1, self.n_el // 6)
         lo, hi = max(0, mid - band), min(self.n_el, mid + band + 1)
@@ -301,15 +309,18 @@ class FGM3D:
             "el_centres": self._el_centres.tolist(),
             "chosen_az": self._last_chosen_az,
             "chosen_el": self._last_chosen_el,
-            "gaps": self._last_gaps,
+            "gaps": self._last_valleys,
+            # VFH-specific: expose density for debugging / advanced viz
+            "density": self._density.tolist(),
         }
 
     def reset(self):
+        self._density[:] = 0.0
         self._blocked = ~self._coverage.copy()
         self._range_map[:] = self.max_range
         self._last_chosen_az = None
         self._last_chosen_el = None
-        self._last_gaps = []
+        self._last_valleys = []
         self._stuck_counter = 0
         self._prev_goal_dist = float('inf')
 
@@ -318,96 +329,129 @@ class FGM3D:
         return self._bubble_radius
 
     # ------------------------------------------------------------------
-    # Spherical map building
+    # VFH density histogram
     # ------------------------------------------------------------------
 
-    def _build_map(self, pts: np.ndarray):
-        """Project obstacle points onto the spherical grid and inflate."""
-        # Start with uncovered cells blocked (can't fly where you can't see)
-        self._blocked = ~self._coverage.copy()
+    def _build_density_map(self, pts: np.ndarray):
+        """
+        Build the VFH polar obstacle density histogram.
+
+        Each obstacle point contributes density  h = a − b·d  (clamped ≥ 0)
+        to all cells within its angular bubble.  The bubble angular radius
+        is  arcsin(bubble_radius / d).  This produces a smooth density
+        field where close obstacles dominate.
+
+        Also fills the range map (min range per cell) used for valley
+        width checks and speed modulation.
+        """
+        self._density[:] = 0.0
         self._range_map[:] = self.max_range
 
         if len(pts) == 0:
             return
 
         dists = np.sqrt(np.sum(pts**2, axis=1))
-        valid = (dists > 0.05) & (dists < self.max_range)
+        valid = (dists > 0.00001) & (dists < self.max_range)
         if not np.any(valid):
             return
 
         pts_v = pts[valid]
         d_v = dists[valid]
 
-        # Spherical coords of each point
+        # Bin indices for range map
         az = np.arctan2(pts_v[:, 1], pts_v[:, 0])
         el = np.arctan2(pts_v[:, 2], np.sqrt(pts_v[:, 0]**2 + pts_v[:, 1]**2))
-
-        # Bin indices
         az_idx = ((az + math.pi) / self._az_res).astype(int) % self.n_az
         el_idx = ((el + self.el_max) / self._el_res).astype(int)
         el_idx = np.clip(el_idx, 0, self.n_el - 1)
-
-        # Fill range map (min range per cell)
         np.minimum.at(self._range_map, (el_idx, az_idx), d_v)
 
-        # Deduplicate: for each occupied cell, keep only the closest point
-        # This avoids redundant inflation for multiple points on the same beam
-        cell_min_dist = {}   # (ei, ai) → min distance
-        cell_min_dir = {}    # (ei, ai) → unit direction of closest point
+        # Deduplicate per cell — keep closest point only (same as FGM3D)
+        cell_min_dist = {}
+        cell_min_dir = {}
         for i in range(len(d_v)):
             key = (int(el_idx[i]), int(az_idx[i]))
             if key not in cell_min_dist or d_v[i] < cell_min_dist[key]:
                 cell_min_dist[key] = float(d_v[i])
                 cell_min_dir[key] = pts_v[i] / d_v[i]
 
-        # Inflate per occupied cell (much fewer iterations than per-point)
+        # Vote density into cells within the angular bubble
         for key, dist in cell_min_dist.items():
-            half_ang = math.asin(min(self.bubble_radius / dist, 1.0))
+            # VFH density weight: closer → higher
+            h = max(self._density_a - self._density_b * dist, 0.0)
+            if h <= 0.0:
+                continue
+
+            # Angular bubble for safety inflation
+            half_ang = math.asin(min(self._bubble_radius / dist, 1.0))
+
             obs_dir = cell_min_dir[key]
             dots = np.sum(self._cell_dirs * obs_dir, axis=-1)
             dots = np.clip(dots, -1.0, 1.0)
             ang_dist = np.arccos(dots)
-            self._blocked |= (ang_dist <= half_ang)
+
+            # Smooth vote: linear fall-off within bubble
+            within = ang_dist <= half_ang
+            falloff = np.where(within,
+                               h * (1.0 - ang_dist / (half_ang + 1e-9)),
+                               0.0)
+            self._density += falloff
+
+    def _apply_threshold(self):
+        """
+        Hysteresis thresholding of density → blocked map.
+
+        Cells above threshold_high become blocked.
+        Cells below threshold_low  become free.
+        Cells in between keep their previous state.
+        Uncovered cells (no sensor) are always blocked.
+        """
+        newly_blocked = self._density >= self._thresh_high
+        newly_free = self._density < self._thresh_low
+
+        # Hysteresis: only change state when threshold is crossed
+        self._blocked = np.where(newly_blocked, True,
+                        np.where(newly_free, False,
+                                 self._blocked))
+
+        # Uncovered cells are always blocked
+        self._blocked[~self._coverage] = True
 
     # ------------------------------------------------------------------
-    # 3-D gap finding via flood fill on the spherical grid
+    # Valley finding (connected-component flood fill)
     # ------------------------------------------------------------------
 
-    def _find_gaps(self):
+    def _find_valleys(self):
         """
-        Find connected free regions on the spherical blocked grid.
+        Find candidate valleys — contiguous free regions on the spherical
+        grid.  Identical topology to FGM3D._find_gaps().
 
-        Returns list of gaps, each a list of (el_idx, az_idx) tuples.
-        Gaps are filtered by both minimum cell count and minimum
-        physical width (angular span × range to nearby obstacles).
+        Returns list of valleys, each a list of (el_idx, az_idx) tuples.
         """
-        # Gap-finding uses range map directly — a cell is free if no obstacle
-        # was detected within safe_distance.  Bubble inflation (used for speed/
-        # retreat safety) is bypassed so triangular truss gaps are found, but
-        # safe_distance creates wide enough barriers around beams to form
-        # distinct gaps between them.
-        free = self._range_map >= self.safe_distance
-        # Blind spots are traversable (unknown ≠ blocked)
+        # A cell is a candidate if (a) not density-blocked, AND
+        # (b) range map shows no obstacle within safe_distance.
+        free = (~self._blocked) & (self._range_map >= self.safe_distance)
+        # Blind spots: traversable (same policy as FGM3D)
         free[~self._coverage] = True
+
         if not np.any(free):
             return []
 
         visited = np.zeros_like(free, dtype=bool)
-        gaps = []
+        valleys = []
 
         for ei in range(self.n_el):
             for ai in range(self.n_az):
                 if free[ei, ai] and not visited[ei, ai]:
-                    # Flood fill
                     cells = []
                     stack = [(ei, ai)]
                     visited[ei, ai] = True
                     while stack:
                         ce, ca = stack.pop()
                         cells.append((ce, ca))
-                        for de, da in [(-1,-1),(-1,0),(-1,1),
-                                       (0,-1),        (0,1),
-                                       (1,-1), (1,0), (1,1)]:
+                        for de, da in [(-1, -1), (-1, 0), (-1, 1),
+                                       (0, -1),           (0, 1),
+                                       (1, -1),  (1, 0),  (1, 1)]:
                             ne = ce + de
                             na = (ca + da) % self.n_az
                             if ne < 0 or ne >= self.n_el:
@@ -418,37 +462,26 @@ class FGM3D:
 
                     if len(cells) < self.min_gap_cells:
                         continue
-
-                    # Check physical width: estimate gap span in metres
-                    if not self._gap_wide_enough(cells):
+                    if not self._valley_wide_enough(cells):
                         continue
+                    valleys.append(cells)
 
-                    gaps.append(cells)
+        return valleys
 
-        return gaps
-
-    def _gap_wide_enough(self, cells) -> bool:
-        """Check if gap is physically wide enough for the drone to fly through.
-
-        Computes the angular span of the gap (bounding box on the grid)
-        and multiplies by the range to the nearest obstacle boundary to
-        get an approximate physical width in metres.
-        """
+    def _valley_wide_enough(self, cells) -> bool:
+        """Check minimum physical width — same logic as FGM3D."""
         ei_vals = [c[0] for c in cells]
         ai_vals = [c[1] for c in cells]
 
-        # Angular span in azimuth and elevation
         az_span = (max(ai_vals) - min(ai_vals) + 1) * self._az_res
         el_span = (max(ei_vals) - min(ei_vals) + 1) * self._el_res
 
-        # Find the range to the nearest blocked cell bordering this gap
-        # (tells us how far away the gap walls are)
         cell_set = set(cells)
         min_border_range = self.max_range
         for ce, ca in cells:
-            for de, da in [(-1,-1),(-1,0),(-1,1),
-                           (0,-1),        (0,1),
-                           (1,-1), (1,0), (1,1)]:
+            for de, da in [(-1, -1), (-1, 0), (-1, 1),
+                           (0, -1),           (0, 1),
+                           (1, -1),  (1, 0),  (1, 1)]:
                 ne = ce + de
                 na = (ca + da) % self.n_az
                 if ne < 0 or ne >= self.n_el:
@@ -458,60 +491,86 @@ class FGM3D:
                     if r < min_border_range:
                         min_border_range = r
 
-        # Physical width ≈ angular_span × range
         phys_w = min(az_span, el_span) * min_border_range
         return phys_w >= self.min_gap_metres
 
-    def _select_gap(self, gaps, goal_az: float, goal_el: float) -> tuple:
-        """
-        Pick the best gap and return (az, el) steering direction.
+    # ------------------------------------------------------------------
+    # VFH+ cost-function valley selection
+    # ------------------------------------------------------------------
 
-        For each gap, find the free cell closest to the goal direction.
-        Score gaps by angular proximity to goal + size bonus + clearance.
+    def _select_valley(self, valleys, goal_az: float, goal_el: float) -> tuple:
         """
-        best_score = float('inf')
-        best_az = goal_az
-        best_el = goal_el
+        VFH+ multi-objective cost function for valley selection.
 
+        For each valley, find the best steering cell, then score the
+        valley by:
+            cost = w_goal · Δ(cell, goal)
+                 + w_smooth · Δ(cell, prev_heading)
+                 − w_width · valley_size
+
+        where Δ is great-circle angular distance.
+
+        Returns (az, el) of the best steering point.
+        """
         goal_dir = np.array([
             math.cos(goal_el) * math.cos(goal_az),
             math.cos(goal_el) * math.sin(goal_az),
             math.sin(goal_el),
         ])
 
-        for cells in gaps:
-            gap_size = len(cells)
+        # Previous heading direction (for smoothness cost)
+        if self._last_chosen_az is not None:
+            prev_az = self._last_chosen_az
+            prev_el = self._last_chosen_el
+        else:
+            prev_az = goal_az
+            prev_el = goal_el
 
-            # Find cell in this gap closest to goal direction,
-            # but penalise cells near obstacles (low range_map)
-            best_cell_score = float('inf')
+        best_cost = float('inf')
+        best_az = goal_az
+        best_el = goal_el
+
+        for cells in valleys:
+            valley_size = len(cells)
+
+            # Find best steering cell in this valley
+            best_cell_cost = float('inf')
             steer_az, steer_el = goal_az, goal_el
+            steer_goal_ang = float('inf')
 
             for ei, ai in cells:
                 cell_dir = self._cell_dirs[ei, ai]
-                dot = float(np.dot(cell_dir, goal_dir))
-                dot = max(-1.0, min(1.0, dot))
-                ang = math.acos(dot)
-                # Clearance penalty: prefer cells far from obstacles
+                # Angular distance to goal
+                dot_goal = float(np.clip(np.dot(cell_dir, goal_dir), -1.0, 1.0))
+                ang_goal = math.acos(dot_goal)
+
+                # Clearance: prefer cells far from obstacles
                 clearance = self._range_map[ei, ai]
                 clearance_penalty = self.max_range / max(clearance, 0.1)
-                cell_score = ang + 0.3 * clearance_penalty
-                if cell_score < best_cell_score:
-                    best_cell_score = cell_score
-                    min_ang = ang
+
+                cell_cost = ang_goal + 0.3 * clearance_penalty
+                if cell_cost < best_cell_cost:
+                    best_cell_cost = cell_cost
                     steer_az = self._az_centres[ai]
                     steer_el = self._el_centres[ei]
+                    steer_goal_ang = ang_goal
 
-            # Pull steering point inward from gap boundary
+            # Pull from boundary
             steer_az, steer_el = self._pull_from_boundary(
                 cells, steer_az, steer_el, goal_dir
             )
 
-            score = (self.gap_weight_goal * min_ang
-                     - self.gap_weight_width * gap_size * self._az_res * self._el_res)
+            # VFH+ cost: goal proximity + heading smoothness − width bonus
+            smooth_ang = _angular_dist_sphere(
+                steer_az, steer_el, prev_az, prev_el)
 
-            if score < best_score:
-                best_score = score
+            cost = (self.gap_weight_goal * steer_goal_ang
+                    + self._cost_smooth * smooth_ang
+                    - self.gap_weight_width * valley_size
+                      * self._az_res * self._el_res)
+
+            if cost < best_cost:
+                best_cost = cost
                 best_az = steer_az
                 best_el = steer_el
 
@@ -519,18 +578,15 @@ class FGM3D:
 
     def _pull_from_boundary(self, cells, steer_az, steer_el, goal_dir):
         """
-        If the chosen steering cell is at the edge of the gap, pull it
-        inward toward the gap centre to avoid shaving obstacles.
+        Pull steering point inward from valley boundary toward centroid.
+        Identical to FGM3D._pull_from_boundary().
         """
-        # Build a set of gap cells for fast lookup
         cell_set = set(cells)
 
-        # Find the cell index of the steering point
         ai = int((steer_az + math.pi) / self._az_res) % self.n_az
         ei = int((steer_el + self.el_max) / self._el_res)
         ei = max(0, min(self.n_el - 1, ei))
 
-        # Check if it's near the boundary
         at_boundary = False
         for de, da in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             ne = ei + de
@@ -545,12 +601,10 @@ class FGM3D:
         if not at_boundary:
             return steer_az, steer_el
 
-        # Find the gap centroid and pull toward it
-        sum_az = 0.0
-        sum_el = 0.0
-        # Use circular mean for azimuth
+        # Gap centroid (circular mean for azimuth)
         sum_sin_az = 0.0
         sum_cos_az = 0.0
+        sum_el = 0.0
         for ce, ca in cells:
             sum_cos_az += math.cos(self._az_centres[ca])
             sum_sin_az += math.sin(self._az_centres[ca])
@@ -560,11 +614,9 @@ class FGM3D:
         centroid_az = math.atan2(sum_sin_az / n, sum_cos_az / n)
         centroid_el = sum_el / n
 
-        # Blend: pull margin fraction toward centroid
         margin_frac = min(0.3, self.edge_margin / math.pi)
-        out_az = steer_az + margin_frac * _wrap_scalar(centroid_az - steer_az)
+        out_az = steer_az + margin_frac * _wrap(centroid_az - steer_az)
         out_el = steer_el + margin_frac * (centroid_el - steer_el)
-
         return out_az, out_el
 
     # ------------------------------------------------------------------
@@ -572,8 +624,8 @@ class FGM3D:
     # ------------------------------------------------------------------
 
     def _retreat(self, pts: np.ndarray, min_obs_dist: float) -> tuple:
-        """When fully blocked, back away from the centroid of nearby obstacles."""
-        speed = self._compute_speed(min_obs_dist) * 0.5  # slow retreat
+        """Back away from the centroid of nearby obstacles."""
+        speed = self._compute_speed(min_obs_dist) * 0.5
         if len(pts) == 0:
             return (0.0, 0.0, 0.0)
 
@@ -582,11 +634,10 @@ class FGM3D:
         if len(close) == 0:
             close = pts
 
-        # Centroid of threats — retreat in opposite direction
         centroid = np.mean(close, axis=0)
         norm = np.linalg.norm(centroid)
         if norm < 0.01:
-            return (-speed, 0.0, 0.0)  # default: back up
+            return (-speed, 0.0, 0.0)
         retreat_dir = -centroid / norm
         return (float(speed * retreat_dir[0]),
                 float(speed * retreat_dir[1]),
@@ -599,13 +650,11 @@ class FGM3D:
         return self.max_speed * ratio
 
 
-def _wrap_scalar(a):
-    return (a + math.pi) % (2 * math.pi) - math.pi
-
-
-# ---------------------------------------------------------------------------
+# -----------------------------------------------------------------------
+# Self-test (same scenarios as FGM3D)
+# -----------------------------------------------------------------------
 if __name__ == "__main__":
-    fgm = FGM3D(
+    vfh = VFH3D(
         n_az=72, n_el=18,
         max_range=3.0,
         bubble_radius=0.55,
@@ -617,31 +666,31 @@ if __name__ == "__main__":
     beam = np.array([
         [1.2, -0.1, 0.0], [1.2, 0.0, 0.0], [1.2, 0.1, 0.0],
     ])
-    vel = fgm.update(beam, (2.0, 0.0, 0.0))
+    vel = vfh.update(beam, (2.0, 0.0, 0.0))
     print(f"Beam ahead → vel=({vel[0]:.3f}, {vel[1]:.3f}, {vel[2]:.3f})")
 
     # Beam above — should go under
-    fgm.reset()
+    vfh.reset()
     beam_above = np.array([
         [0.5, -0.3, 0.5], [0.5, 0.0, 0.5], [0.5, 0.3, 0.5],
         [-0.2, 0.0, 0.5], [0.0, 0.3, 0.5],
     ])
-    vel = fgm.update(beam_above, (2.0, 0.0, 0.3))
+    vel = vfh.update(beam_above, (2.0, 0.0, 0.3))
     print(f"\nBeam above, goal up → vel=({vel[0]:.3f}, {vel[1]:.3f}, {vel[2]:.3f})")
     print(f"  Should steer forward but avoid going up")
 
     # Rafter blocking forward-up, gap is forward-low
-    fgm.reset()
+    vfh.reset()
     rafter = np.array([
         [1.0, y, 0.3 + abs(y) * 0.3]
         for y in np.linspace(-1.0, 1.0, 15)
     ])
-    vel = fgm.update(rafter, (2.0, 0.0, -0.5))
+    vel = vfh.update(rafter, (2.0, 0.0, -0.5))
     print(f"\nRafter blocking fwd-up → vel=({vel[0]:.3f}, {vel[1]:.3f}, {vel[2]:.3f})")
     print(f"  Should go forward-and-down (vz negative)")
 
     # No obstacles — straight to goal
-    fgm.reset()
-    vel = fgm.update(np.empty((0, 3)), (2.0, 0.5, 1.0))
+    vfh.reset()
+    vel = vfh.update(np.empty((0, 3)), (2.0, 0.5, 1.0))
     print(f"\nNo obstacles → vel=({vel[0]:.3f}, {vel[1]:.3f}, {vel[2]:.3f})")
     print(f"  Should point toward goal")

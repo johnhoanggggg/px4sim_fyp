@@ -2,7 +2,7 @@
 """
 Read 12 ToF sensor values from Gazebo Transport topics.
 
-Subscribes to /tof/0 .. /tof/9, /tof/up, /tof/down and exposes the latest
+Subscribes to /tof/s0 .. /tof/s9, /tof/up, /tof/down and exposes the latest
 range data as numpy arrays and 3D obstacle points in body frame.
 
 Requires: gz-transport and gz-msgs Python bindings (ship with Gazebo Harmonic),
@@ -30,20 +30,20 @@ except ImportError:
 # Each sensor: 8x8 rays, FOV ±0.3927 rad (~±22.5°, total ~45°)
 
 HORIZONTAL_SENSORS = {
-    "0": {"yaw": 0.0},
-    "1": {"yaw": 0.6283},
-    "2": {"yaw": 1.2566},
-    "3": {"yaw": 1.8850},
-    "5": {"yaw": 3.1416},
-    "7": {"yaw": -1.8850},
-    "8": {"yaw": -1.2566},
-    "9": {"yaw": -0.6283},
+    "s0": {"yaw": 0.0},
+    "s1": {"yaw": 0.6283},
+    "s2": {"yaw": 1.2566},
+    "s3": {"yaw": 1.8850},
+    "s5": {"yaw": 3.1416},
+    "s7": {"yaw": -1.8850},
+    "s8": {"yaw": -1.2566},
+    "s9": {"yaw": -0.6283},
 }
 
 # Pitched / vertical sensors: pitch angle (rotation about Y axis in SDF)
 VERTICAL_SENSORS = {
-    "4":    {"pitch": -math.pi / 4},   # forward-up 45°
-    "6":    {"pitch":  math.pi / 4},   # forward-down 45°
+    "s4":   {"pitch": -math.pi / 4},   # forward-up 45°
+    "s6":   {"pitch":  math.pi / 4},   # forward-down 45°
     "up":   {"pitch": -math.pi / 2},   # straight up
     "down": {"pitch":  math.pi / 2},   # straight down
 }

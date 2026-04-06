@@ -3,18 +3,14 @@
 ROS2 node that subscribes to 12 bridged ToF LaserScan topics and publishes
 an aggregated PointCloud2 of obstacle points in body frame.
 
-This is the ROS2 equivalent of scripts/tof_reader.py, which used Gazebo
-Transport directly.
-
 Subscriptions:
-    /tof/0 .. /tof/9, /tof/up, /tof/down  (sensor_msgs/LaserScan)
+    /tof/s0 .. /tof/s9, /tof/up, /tof/down  (sensor_msgs/LaserScan)
 
 Publications:
     /tof/obstacles  (sensor_msgs/PointCloud2)  — all obstacle points in body FLU
 """
 
 import math
-import struct
 import threading
 
 import numpy as np
@@ -25,27 +21,28 @@ from sensor_msgs.msg import LaserScan, PointCloud2, PointField
 from std_msgs.msg import Header
 
 # Sensor geometry from x500_tof model.sdf
+# Keys match the Gazebo topic suffix: /tof/s0, /tof/s1, etc.
 HORIZONTAL_SENSORS = {
-    '0': {'yaw': 0.0},
-    '1': {'yaw': 0.6283},
-    '2': {'yaw': 1.2566},
-    '3': {'yaw': 1.8850},
-    '5': {'yaw': 3.1416},
-    '7': {'yaw': -1.8850},
-    '8': {'yaw': -1.2566},
-    '9': {'yaw': -0.6283},
+    's0': {'yaw': 0.0},
+    's1': {'yaw': 0.6283},
+    's2': {'yaw': 1.2566},
+    's3': {'yaw': 1.8850},
+    's5': {'yaw': 3.1416},
+    's7': {'yaw': -1.8850},
+    's8': {'yaw': -1.2566},
+    's9': {'yaw': -0.6283},
 }
 
 VERTICAL_SENSORS = {
-    '4':    {'pitch': -math.pi / 4},   # forward-up 45 deg
-    '6':    {'pitch':  math.pi / 4},   # forward-down 45 deg
-    'up':   {'pitch': -math.pi / 2},   # straight up
-    'down': {'pitch':  math.pi / 2},   # straight down
+    's4':   {'pitch': -math.pi / 4},
+    's6':   {'pitch':  math.pi / 4},
+    'up':   {'pitch': -math.pi / 2},
+    'down': {'pitch':  math.pi / 2},
 }
 
 H_SAMPLES = 8
 V_SAMPLES = 8
-FOV_HALF = 0.3927  # rad
+FOV_HALF = 0.3927
 
 
 def _rotz(yaw):
@@ -107,7 +104,7 @@ class TofAggregatorNode(Node):
                 dy = math.cos(v_ang) * math.sin(h_ang)
                 dz = math.sin(v_ang)
                 dirs.append((dx, dy, dz))
-        self._ray_dirs = np.array(dirs)  # (64, 3)
+        self._ray_dirs = np.array(dirs)
 
         # Pre-compute rotation matrices
         self._rot = {}
@@ -127,7 +124,7 @@ class TofAggregatorNode(Node):
             depth=1,
         )
 
-        # Subscribe to all 12 ToF topics
+        # Subscribe to all 12 ToF topics via ros_gz_bridge
         all_sensors = list(HORIZONTAL_SENSORS.keys()) + list(VERTICAL_SENSORS.keys())
         for name in all_sensors:
             topic = f'/tof/{name}'

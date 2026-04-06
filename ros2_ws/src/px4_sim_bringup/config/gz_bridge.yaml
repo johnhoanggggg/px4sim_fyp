@@ -5,52 +5,52 @@
 #   ros2 run ros_gz_bridge parameter_bridge --ros-args -p config_file:=<path>/gz_bridge.yaml
 
 # --- ToF Sensors (12x gpu_lidar → LaserScan) ---
-- topic_name: /tof/0
+- topic_name: /tof/s0
   ros_type_name: sensor_msgs/msg/LaserScan
   gz_type_name: gz.msgs.LaserScan
   direction: GZ_TO_ROS
 
-- topic_name: /tof/1
+- topic_name: /tof/s1
   ros_type_name: sensor_msgs/msg/LaserScan
   gz_type_name: gz.msgs.LaserScan
   direction: GZ_TO_ROS
 
-- topic_name: /tof/2
+- topic_name: /tof/s2
   ros_type_name: sensor_msgs/msg/LaserScan
   gz_type_name: gz.msgs.LaserScan
   direction: GZ_TO_ROS
 
-- topic_name: /tof/3
+- topic_name: /tof/s3
   ros_type_name: sensor_msgs/msg/LaserScan
   gz_type_name: gz.msgs.LaserScan
   direction: GZ_TO_ROS
 
-- topic_name: /tof/4
+- topic_name: /tof/s4
   ros_type_name: sensor_msgs/msg/LaserScan
   gz_type_name: gz.msgs.LaserScan
   direction: GZ_TO_ROS
 
-- topic_name: /tof/5
+- topic_name: /tof/s5
   ros_type_name: sensor_msgs/msg/LaserScan
   gz_type_name: gz.msgs.LaserScan
   direction: GZ_TO_ROS
 
-- topic_name: /tof/6
+- topic_name: /tof/s6
   ros_type_name: sensor_msgs/msg/LaserScan
   gz_type_name: gz.msgs.LaserScan
   direction: GZ_TO_ROS
 
-- topic_name: /tof/7
+- topic_name: /tof/s7
   ros_type_name: sensor_msgs/msg/LaserScan
   gz_type_name: gz.msgs.LaserScan
   direction: GZ_TO_ROS
 
-- topic_name: /tof/8
+- topic_name: /tof/s8
   ros_type_name: sensor_msgs/msg/LaserScan
   gz_type_name: gz.msgs.LaserScan
   direction: GZ_TO_ROS
 
-- topic_name: /tof/9
+- topic_name: /tof/s9
   ros_type_name: sensor_msgs/msg/LaserScan
   gz_type_name: gz.msgs.LaserScan
   direction: GZ_TO_ROS

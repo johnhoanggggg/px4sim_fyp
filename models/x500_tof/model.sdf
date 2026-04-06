@@ -16,7 +16,7 @@
         <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
-        <topic>/tof/0</topic>
+        <topic>/tof/s0</topic>
       </sensor>
     </link>
     <joint name="tof_0_joint" type="fixed"><parent>base_link</parent><child>tof_0_link</child></joint>
@@ -32,7 +32,7 @@
         <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
-        <topic>/tof/1</topic>
+        <topic>/tof/s1</topic>
       </sensor>
     </link>
     <joint name="tof_1_joint" type="fixed"><parent>base_link</parent><child>tof_1_link</child></joint>
@@ -48,7 +48,7 @@
         <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
-        <topic>/tof/2</topic>
+        <topic>/tof/s2</topic>
       </sensor>
     </link>
     <joint name="tof_2_joint" type="fixed"><parent>base_link</parent><child>tof_2_link</child></joint>
@@ -64,7 +64,7 @@
         <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
-        <topic>/tof/3</topic>
+        <topic>/tof/s3</topic>
       </sensor>
     </link>
     <joint name="tof_3_joint" type="fixed"><parent>base_link</parent><child>tof_3_link</child></joint>
@@ -80,7 +80,7 @@
         <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
-        <topic>/tof/4</topic>
+        <topic>/tof/s4</topic>
       </sensor>
     </link>
     <joint name="tof_4_joint" type="fixed"><parent>base_link</parent><child>tof_4_link</child></joint>
@@ -96,7 +96,7 @@
         <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
-        <topic>/tof/5</topic>
+        <topic>/tof/s5</topic>
       </sensor>
     </link>
     <joint name="tof_5_joint" type="fixed"><parent>base_link</parent><child>tof_5_link</child></joint>
@@ -112,7 +112,7 @@
         <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
-        <topic>/tof/6</topic>
+        <topic>/tof/s6</topic>
       </sensor>
     </link>
     <joint name="tof_6_joint" type="fixed"><parent>base_link</parent><child>tof_6_link</child></joint>
@@ -128,7 +128,7 @@
         <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
-        <topic>/tof/7</topic>
+        <topic>/tof/s7</topic>
       </sensor>
     </link>
     <joint name="tof_7_joint" type="fixed"><parent>base_link</parent><child>tof_7_link</child></joint>
@@ -144,7 +144,7 @@
         <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
-        <topic>/tof/8</topic>
+        <topic>/tof/s8</topic>
       </sensor>
     </link>
     <joint name="tof_8_joint" type="fixed"><parent>base_link</parent><child>tof_8_link</child></joint>
@@ -160,7 +160,7 @@
         <ray><scan><horizontal><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.3927</min_angle><max_angle>0.3927</max_angle></vertical></scan><range><min>0.02</min><max>2.0</max><resolution>0.001</resolution></range><noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise></ray>
         <always_on>1</always_on>
         <visualize>true</visualize>
-        <topic>/tof/9</topic>
+        <topic>/tof/s9</topic>
       </sensor>
     </link>
     <joint name="tof_9_joint" type="fixed"><parent>base_link</parent><child>tof_9_link</child></joint>
@@ -208,8 +208,6 @@
         <inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
       </inertial>
       <sensor name="oakd_left" type="camera">
-        <gz_frame_id>oakd_left_link</gz_frame_id>
-        <pose relative_to="base_link">0.10 0.0375 -0.02 0 0 0</pose>
         <update_rate>30</update_rate>
         <camera name="oakd_left">
           <horizontal_fov>1.2741</horizontal_fov> <!-- 73 deg -->
@@ -250,8 +248,6 @@
         <inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
       </inertial>
       <sensor name="oakd_right" type="camera">
-        <gz_frame_id>oakd_right_link</gz_frame_id>
-        <pose relative_to="base_link">0.10 -0.0375 -0.02 0 0 0</pose>
         <update_rate>30</update_rate>
         <camera name="oakd_right">
           <horizontal_fov>1.2741</horizontal_fov>
@@ -291,18 +287,17 @@
         <inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
       </inertial>
       <sensor name="oakd_imu" type="imu">
-        <gz_frame_id>oakd_imu_link</gz_frame_id>
         <update_rate>200</update_rate>
         <imu>
           <angular_velocity>
-            <x><noise><type>gaussian</type><mean>0</mean><stddev>0.0003</stddev></noise></x>
-            <y><noise><type>gaussian</type><mean>0</mean><stddev>0.0003</stddev></noise></y>
-            <z><noise><type>gaussian</type><mean>0</mean><stddev>0.0003</stddev></noise></z>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.0003</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.0003</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.0003</stddev></noise></z>
           </angular_velocity>
           <linear_acceleration>
-            <x><noise><type>gaussian</type><mean>0</mean><stddev>0.003</stddev></noise></x>
-            <y><noise><type>gaussian</type><mean>0</mean><stddev>0.003</stddev></noise></y>
-            <z><noise><type>gaussian</type><mean>0</mean><stddev>0.003</stddev></noise></z>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.003</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.003</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.003</stddev></noise></z>
           </linear_acceleration>
         </imu>
         <always_on>1</always_on>

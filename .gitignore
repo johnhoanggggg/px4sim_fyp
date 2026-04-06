@@ -1,1 +1,9 @@
 scripts/__pycache__/
+
+# ROS2 build artifacts
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# External ROS2 packages (cloned, not our code)
+ros2_ws/src/px4_msgs/
