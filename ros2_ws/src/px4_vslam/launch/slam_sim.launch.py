@@ -25,10 +25,10 @@ def generate_launch_description():
     pkg_dir = get_package_share_directory('px4_vslam')
     config_file = os.path.join(pkg_dir, 'config', 'rtabmap_params.yaml')
 
+    use_sim_time = {'use_sim_time': True}
+
     # Gazebo uses frame_id "x500_tof_0/oakd_left_link/oakd_left" etc.
     # RTAB-Map needs base_link → camera transforms via TF.
-    # Publish static transforms: base_link → each camera frame
-    # Left camera: (0.10, 0.0375, -0.02) from base_link
     tf_left = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -36,9 +36,9 @@ def generate_launch_description():
             '0.10', '0.0375', '-0.02', '0', '0', '0',
             'base_link', 'x500_tof_0/oakd_left_link/oakd_left',
         ],
+        parameters=[use_sim_time],
     )
 
-    # Right camera: (0.10, -0.0375, -0.02) from base_link
     tf_right = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -46,9 +46,9 @@ def generate_launch_description():
             '0.10', '-0.0375', '-0.02', '0', '0', '0',
             'base_link', 'x500_tof_0/oakd_right_link/oakd_right',
         ],
+        parameters=[use_sim_time],
     )
 
-    # IMU: (0.10, 0, -0.02) from base_link
     tf_imu = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -56,15 +56,15 @@ def generate_launch_description():
             '0.10', '0', '-0.02', '0', '0', '0',
             'base_link', 'x500_tof_0/oakd_imu_link/oakd_imu',
         ],
+        parameters=[use_sim_time],
     )
 
     # Stereo baseline fixer: injects Tx into right camera_info
-    # Gazebo bridge doesn't set P[3] (Tx = -fx * baseline) needed by RTAB-Map
     baseline_fixer = Node(
         package='px4_vslam',
         executable='stereo_baseline_fixer',
         name='stereo_baseline_fixer',
-        parameters=[{'baseline': 0.075, 'fx': 432.0}],
+        parameters=[{'baseline': 0.075, 'fx': 432.0}, use_sim_time],
         output='screen',
     )
 
@@ -76,6 +76,7 @@ def generate_launch_description():
         parameters=[
             config_file,
             {'approx_sync': True},
+            use_sim_time,
         ],
         remappings=[
             ('left/image_rect', '/oakd/left/image_raw'),
@@ -95,6 +96,7 @@ def generate_launch_description():
         parameters=[
             config_file,
             {'subscribe_stereo': True, 'approx_sync': True},
+            use_sim_time,
         ],
         remappings=[
             ('left/image_rect', '/oakd/left/image_raw'),
@@ -111,7 +113,7 @@ def generate_launch_description():
         package='px4_vslam',
         executable='slam_bridge',
         name='slam_bridge',
-        parameters=[{'odom_topic': '/rtabmap/odom'}],
+        parameters=[{'odom_topic': '/rtabmap/odom'}, use_sim_time],
         output='screen',
     )
 

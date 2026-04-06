@@ -42,6 +42,8 @@ def generate_launch_description():
     # --- ros_gz_bridge ---
     # Use command-line argument style for maximum compatibility
     bridge_args = [
+        # Clock (required for use_sim_time)
+        '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
         # ToF sensors (12x gpu_lidar)
         '/tof/0@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
         '/tof/1@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
