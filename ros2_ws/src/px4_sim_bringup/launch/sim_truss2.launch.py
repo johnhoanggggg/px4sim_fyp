@@ -1,17 +1,17 @@
 """
-Launch file for full truss2 simulation with ROS2 integration.
+Launch file for truss2 simulation with ROS2 integration.
 
 Launches:
-  1. ros_gz_bridge — bridges ToF, camera, and IMU topics from Gazebo to ROS2
-  2. RTAB-Map stereo SLAM
-  3. SLAM bridge node (vision pose → PX4 EKF2)
-  4. ToF aggregator + avoidance nodes
+  1. ros_gz_bridge — bridges ToF, camera, IMU, and clock from Gazebo to ROS2
+  2. micro-XRCE-DDS agent (PX4 ↔ ROS2)
+  3. ToF aggregator + avoidance nodes
+
+SLAM is launched separately once the drone is airborne:
+  ros2 launch px4_vslam slam_sim.launch.py
 
 Prerequisites:
   - PX4 SITL must be started separately:
       cd ~/PX4-Autopilot && PX4_GZ_WORLD=truss2 make px4_sitl gz_x500_tof
-  - In the PX4 shell, start the DDS client:
-      uxrce_dds_client start -t udp -h 127.0.0.1 -p 8888
 
 Usage:
   ros2 launch px4_sim_bringup sim_truss2.launch.py
@@ -25,7 +25,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
+from launch_ros.actions import Node  # noqa: F401
 
 
 def generate_launch_description():
@@ -79,13 +79,6 @@ def generate_launch_description():
         output='screen',
     )
 
-    # --- RTAB-Map stereo SLAM ---
-    slam_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(vslam_dir, 'launch', 'slam_sim.launch.py')
-        ),
-    )
-
     # --- ToF avoidance ---
     avoidance_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -98,6 +91,5 @@ def generate_launch_description():
         algorithm_arg,
         gz_bridge,
         uxrce_agent,
-        slam_launch,
         avoidance_launch,
     ])
