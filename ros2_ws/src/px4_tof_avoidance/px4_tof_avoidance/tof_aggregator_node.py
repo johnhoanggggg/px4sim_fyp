@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-ROS2 node that reads ToF sensors directly from Gazebo Transport and publishes
+ROS2 node that subscribes to 12 bridged ToF LaserScan topics and publishes
 an aggregated PointCloud2 of obstacle points in body frame.
 
-Uses gz-transport Python bindings directly (like scripts/tof_reader.py) since
-ROS2 topic names can't start with a number (/tof/0 is invalid in ROS2).
+Subscriptions:
+    /tof/s0 .. /tof/s9, /tof/up, /tof/down  (sensor_msgs/LaserScan)
 
 Publications:
     /tof/obstacles  (sensor_msgs/PointCloud2)  — all obstacle points in body FLU
@@ -12,44 +12,30 @@ Publications:
 
 import math
 import threading
-import sys
 
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import PointCloud2, PointField
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from sensor_msgs.msg import LaserScan, PointCloud2, PointField
 from std_msgs.msg import Header
 
-try:
-    from gz.transport import Node as GzNode
-except ImportError:
-    try:
-        from gz.transport13 import Node as GzNode
-    except ImportError:
-        print("ERROR: gz-transport Python bindings not found.", file=sys.stderr)
-        print("Install with: pip3 install gz-transport13-python", file=sys.stderr)
-        sys.exit(1)
-
-try:
-    from gz.msgs.laserscan_pb2 import LaserScan as GzLaserScan
-except ImportError:
-    from gz.msgs10.laserscan_pb2 import LaserScan as GzLaserScan
-
 # Sensor geometry from x500_tof model.sdf
+# Keys match the Gazebo topic suffix: /tof/s0, /tof/s1, etc.
 HORIZONTAL_SENSORS = {
-    '0': {'yaw': 0.0},
-    '1': {'yaw': 0.6283},
-    '2': {'yaw': 1.2566},
-    '3': {'yaw': 1.8850},
-    '5': {'yaw': 3.1416},
-    '7': {'yaw': -1.8850},
-    '8': {'yaw': -1.2566},
-    '9': {'yaw': -0.6283},
+    's0': {'yaw': 0.0},
+    's1': {'yaw': 0.6283},
+    's2': {'yaw': 1.2566},
+    's3': {'yaw': 1.8850},
+    's5': {'yaw': 3.1416},
+    's7': {'yaw': -1.8850},
+    's8': {'yaw': -1.2566},
+    's9': {'yaw': -0.6283},
 }
 
 VERTICAL_SENSORS = {
-    '4':    {'pitch': -math.pi / 4},
-    '6':    {'pitch':  math.pi / 4},
+    's4':   {'pitch': -math.pi / 4},
+    's6':   {'pitch':  math.pi / 4},
     'up':   {'pitch': -math.pi / 2},
     'down': {'pitch':  math.pi / 2},
 }
@@ -127,21 +113,28 @@ class TofAggregatorNode(Node):
         for name, cfg in VERTICAL_SENSORS.items():
             self._rot[name] = _roty(cfg['pitch'])
 
-        # Latest ranges per sensor (from Gazebo Transport callbacks)
+        # Latest ranges per sensor
         self._lock = threading.Lock()
         self._ranges: dict[str, np.ndarray] = {}
 
-        # Subscribe to all 12 ToF topics via Gazebo Transport directly
-        self._gz_node = GzNode()
+        # QoS for sensor data
+        sensor_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+        )
+
+        # Subscribe to all 12 ToF topics via ros_gz_bridge
         all_sensors = list(HORIZONTAL_SENSORS.keys()) + list(VERTICAL_SENSORS.keys())
         for name in all_sensors:
             topic = f'/tof/{name}'
-            self._gz_node.subscribe(
-                GzLaserScan, topic,
-                lambda msg, sn=name: self._gz_cb(sn, msg),
+            self.create_subscription(
+                LaserScan, topic,
+                lambda msg, sn=name: self._tof_cb(sn, msg),
+                sensor_qos,
             )
 
-        # ROS2 publisher
+        # Publisher
         self._pub = self.create_publisher(PointCloud2, '/tof/obstacles', 10)
 
         # Timer for aggregation + publish
@@ -149,12 +142,12 @@ class TofAggregatorNode(Node):
         self.create_timer(period, self._publish_obstacles)
 
         self.get_logger().info(
-            f'ToF aggregator started: {len(all_sensors)} sensors via gz-transport, '
+            f'ToF aggregator started: {len(all_sensors)} sensors, '
             f'range [{self._min_range:.2f}, {self._max_range:.2f}]m, '
             f'{publish_rate:.0f}Hz'
         )
 
-    def _gz_cb(self, sensor_name: str, msg: GzLaserScan):
+    def _tof_cb(self, sensor_name: str, msg: LaserScan):
         ranges = np.array(msg.ranges, dtype=np.float32)
         with self._lock:
             self._ranges[sensor_name] = ranges

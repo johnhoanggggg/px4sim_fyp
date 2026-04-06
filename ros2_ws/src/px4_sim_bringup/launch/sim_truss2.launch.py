@@ -42,9 +42,19 @@ def generate_launch_description():
     bridge_args = [
         # Clock (required for use_sim_time)
         '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
-        # NOTE: ToF sensors (/tof/0..9) are NOT bridged here because ROS2
-        # rejects topic tokens starting with a number. The tof_aggregator
-        # node reads them directly via gz-transport Python bindings instead.
+        # ToF sensors (12x gpu_lidar) — named /tof/s0..s9 to be valid ROS2 topics
+        '/tof/s0@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/s1@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/s2@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/s3@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/s4@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/s5@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/s6@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/s7@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/s8@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/s9@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/up@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/tof/down@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
         # OAK-D Lite stereo camera
         '/oakd/left/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
         '/oakd/right/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',

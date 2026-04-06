@@ -96,7 +96,7 @@ The X500 model includes 12 GPU-based LIDAR sensors simulating VL53L8CX ToF senso
 
 | Sensor | Direction | Topic |
 |--------|-----------|-------|
-| ToF 0–9 | Horizontal ring (36-degree spacing) | `/tof/0` – `/tof/9` |
+| ToF 0–9 | Horizontal ring (36-degree spacing) | `/tof/s0` – `/tof/s9` |
 | ToF Up | Upward | `/tof/up` |
 | ToF Down | Downward | `/tof/down` |
 
