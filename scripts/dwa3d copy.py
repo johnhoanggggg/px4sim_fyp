@@ -124,7 +124,6 @@ class DWA3D:
         safety_margin_cells: int = 1,
         clearance_radius_cells: int = 2,
         el_max_deg: float = 70.0,
-        w_el_repulsion: float = -1.5,
     ):
         self.n_az = n_az
         self.n_el = n_el
@@ -139,7 +138,6 @@ class DWA3D:
         self._safety_margin_cells = safety_margin_cells
         self._clearance_radius_cells = clearance_radius_cells
         self.el_max = math.radians(el_max_deg)
-        self.w_el_repulsion = w_el_repulsion
 
         # Azimuth bin centres [-pi, pi)
         self._az_res = 2 * math.pi / n_az
@@ -209,7 +207,7 @@ class DWA3D:
         min_obs_dist = float('inf')
         if len(obstacle_pts) > 0:
             dists = np.sqrt(np.sum(obstacle_pts**2, axis=1))
-            valid = dists > 0.001
+            valid = dists > 0.05
             if np.any(valid):
                 min_obs_dist = float(np.min(dists[valid]))
 
@@ -393,67 +391,15 @@ class DWA3D:
         else:
             cost_smooth = np.zeros((self.n_el, self.n_az))
 
-        # --- cost_proximity_repulsion: hard push away from close obstacles ---
-        # For each candidate direction, compute the dot product with the direction
-        # TO the obstacle. High dot = pointing toward it = high cost.
-        # Scaled by 1/r^2 so close obstacles dominate overwhelmingly.
-        cost_proximity_repulsion = np.zeros((self.n_el, self.n_az))
-
-        if np.any(self._range_map < self.safe_distance):
-            for ei in range(self.n_el):
-                for ai in range(self.n_az):
-                    r = self._range_map[ei, ai]
-                    if r >= self.safe_distance:
-                        continue
-                    # Direction toward this obstacle
-                    obs_dir = self._cell_dirs[ei, ai]
-                    # Dot with every candidate direction
-                    dots = np.sum(self._cell_dirs * obs_dir, axis=-1)  # (n_el, n_az)
-                    # 1/r^2 weighting — very close = enormous penalty
-                    weight = (self.safe_distance / max(r, 0.05)) ** 2
-                    # Only penalise candidates pointing TOWARD the obstacle (dot > 0)
-                    cost_proximity_repulsion += weight * np.maximum(0.0, dots)
-
-            # Normalise
-            peak = cost_proximity_repulsion.max()
-            if peak > 1e-6:
-                cost_proximity_repulsion /= peak
-        # --- cost_el_repulsion: penalise candidates near obstacle elevations ---
-        # Per-candidate: sum of proximity-weighted Gaussian penalties from every
-        # occupied cell's elevation. A steep obstacle directly above creates a
-        # sharp high-cost band around that elevation, not a diluted mean.
-        obs_w = np.where(self._range_map < self.max_range,
-                        1.0 - self._range_map / self.max_range,
-                        0.0)                                       # (n_el, n_az)
-
-        cand_el = self._el_centres[:, None] * np.ones((1, self.n_az))  # (n_el, n_az)
-
-        sigma = self.el_max / 3.0   # width of penalty band (~23 deg for el_max=70)
-        cost_el_repulsion = np.zeros((self.n_el, self.n_az))
-
-        for ei in range(self.n_el):
-            obs_el = self._el_centres[ei]
-            row_w  = obs_w[ei, :].sum()          # total weight from this elevation row
-            if row_w < 1e-6:
-                continue
-            # Gaussian penalty band centred on this obstacle elevation
-            penalty = row_w * np.exp(-0.5 * ((cand_el - obs_el) / sigma) ** 2)
-            cost_el_repulsion += penalty
-
-        # Normalise so the weight scale stays consistent
-        peak = cost_el_repulsion.max()
-        if peak > 1e-6:
-            cost_el_repulsion /= peak
+        # --- cost_reverse: penalty for backward motion (X < 0 in body FLU) ---
         forward_component = self._cell_dirs[..., 0]
         cost_reverse = np.maximum(0.0, -forward_component)
 
         # --- total ---
-        total = (self.w_goal       * cost_goal
-            + self.w_obstacle   * cost_obstacle**2
-            + self.w_smooth     * cost_smooth
-            + self.w_reverse    * cost_reverse
-            + self.w_el_repulsion * cost_el_repulsion)   # <-- ADD
-            # + self.w_obstacle * cost_proximity_repulsion)
+        total = (self.w_goal * cost_goal
+                 + self.w_obstacle * cost_obstacle
+                 + self.w_smooth * cost_smooth
+                 + self.w_reverse * cost_reverse)
 
         total[~admissible] = np.inf
         return total
