@@ -5,8 +5,9 @@
 # @type Quadrotor
 #
 
-# Change x500_tof to exactly match your new folder name
-PX4_SIM_MODEL=${PX4_SIM_MODEL:=propguards_tof}
+# Must be a hard assignment — CMake sets PX4_SIM_MODEL=gz_propguards_tof
+# from the filename, so :=default won't override it
+PX4_SIM_MODEL=propguards_tof
 
 # Keep this line! It loads the base quadcopter flight dynamics and tuning
 . ${R}etc/init.d-posix/airframes/4001_gz_x500
