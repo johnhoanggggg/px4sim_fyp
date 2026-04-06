@@ -2,6 +2,12 @@
 REPO_DIR=$(dirname "$(realpath "$0")")
 PX4_DIR=${1:-$HOME/PX4-Autopilot}
 
+ln -sfn $REPO_DIR/models/propguards \
+  $PX4_DIR/Tools/simulation/gz/models/propguards
+
+ln -sfn $REPO_DIR/models/propguards_tof \
+  $PX4_DIR/Tools/simulation/gz/models/propguards_tof
+
 ln -sfn $REPO_DIR/models/x500_tof \
   $PX4_DIR/Tools/simulation/gz/models/x500_tof
 
