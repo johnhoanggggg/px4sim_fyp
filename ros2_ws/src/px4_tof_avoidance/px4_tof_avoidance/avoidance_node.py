@@ -24,7 +24,6 @@ Parameters:
 """
 
 import math
-import struct
 
 import numpy as np
 import rclpy
@@ -43,6 +42,7 @@ try:
         OffboardControlMode,
         VehicleOdometry,
         VehicleCommand,
+        VehicleStatus,
     )
     HAS_PX4_MSGS = True
 except ImportError:
@@ -140,6 +140,12 @@ class AvoidanceNode(Node):
         self._yaw = 0.0
         self._prev_vel_ned = (0.0, 0.0, 0.0)
 
+        # Arming / offboard state
+        self._armed = False
+        self._nav_state = 0
+        self._offboard_setpoint_count = 0
+        self._OFFBOARD_THRESHOLD = 20  # send N setpoints before switching
+
         # Waypoints
         self._waypoints = DEFAULT_WAYPOINTS
         self._wp_idx = 0
@@ -166,6 +172,10 @@ class AvoidanceNode(Node):
             VehicleOdometry, '/fmu/out/vehicle_odometry',
             self._odom_cb, sensor_qos,
         )
+        self.create_subscription(
+            VehicleStatus, '/fmu/out/vehicle_status',
+            self._status_cb, sensor_qos,
+        )
 
         # Publishers
         self._traj_pub = self.create_publisher(
@@ -173,6 +183,9 @@ class AvoidanceNode(Node):
         )
         self._offboard_pub = self.create_publisher(
             OffboardControlMode, '/fmu/in/offboard_control_mode', px4_qos,
+        )
+        self._cmd_pub = self.create_publisher(
+            VehicleCommand, '/fmu/in/vehicle_command', px4_qos,
         )
 
         # Control loop timer
@@ -191,8 +204,37 @@ class AvoidanceNode(Node):
         self._position_ned = (msg.position[0], msg.position[1], msg.position[2])
         self._yaw = _euler_from_quaternion(msg.q)
 
+    def _status_cb(self, msg: VehicleStatus):
+        self._armed = (msg.arming_state == VehicleStatus.ARMING_STATE_ARMED)
+        self._nav_state = msg.nav_state
+
+    def _send_command(self, command, param1=0.0, param2=0.0, param7=0.0):
+        msg = VehicleCommand()
+        msg.command = command
+        msg.param1 = param1
+        msg.param2 = param2
+        msg.param7 = param7
+        msg.target_system = 1
+        msg.target_component = 1
+        msg.source_system = 1
+        msg.source_component = 1
+        msg.from_external = True
+        msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
+        self._cmd_pub.publish(msg)
+
+    def _arm(self):
+        self._send_command(
+            VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM, param1=1.0)
+        self.get_logger().info('Arm command sent')
+
+    def _set_offboard_mode(self):
+        self._send_command(
+            VehicleCommand.VEHICLE_CMD_DO_SET_MODE,
+            param1=1.0, param2=6.0)  # 6 = PX4_CUSTOM_MAIN_MODE_OFFBOARD
+        self.get_logger().info('Offboard mode command sent')
+
     def _control_loop(self):
-        # Publish offboard control mode (velocity)
+        # Always publish offboard control mode (velocity)
         ocm = OffboardControlMode()
         ocm.position = False
         ocm.velocity = True
@@ -202,7 +244,19 @@ class AvoidanceNode(Node):
         ocm.timestamp = int(self.get_clock().now().nanoseconds / 1000)
         self._offboard_pub.publish(ocm)
 
+        self._offboard_setpoint_count += 1
+
+        # After enough setpoints, switch to offboard mode and arm
+        if self._offboard_setpoint_count == self._OFFBOARD_THRESHOLD:
+            self._set_offboard_mode()
+            self._arm()
+
         if self._position_ned is None:
+            return
+
+        if not self._armed:
+            # Keep publishing zero velocity until armed
+            self._publish_velocity(0.0, 0.0, 0.0)
             return
 
         if self._wp_idx >= len(self._waypoints):
